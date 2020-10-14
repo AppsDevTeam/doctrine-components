@@ -61,8 +61,8 @@ abstract class BaseQuery extends QueryObject
 	 * Obecná metoda na vyhledávání ve více sloupcích (spojení přes OR).
 	 * Podle vyhledávané hodnoty, případně parametru strict (LIKE vs. =), se zvolí typ vyhledávání (IN, LIKE, =).
 	 *
-	 * @param $column
-	 * @param $value
+	 * @param string|string[] $column
+	 * @param mix $value
 	 * @param bool $strict
 	 * @return $this
 	 */
