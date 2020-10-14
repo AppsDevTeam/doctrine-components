@@ -100,11 +100,26 @@ abstract class BaseQuery extends QueryObject
 	 * @param string $order
 	 * @return self
 	 */
-	public function orderBy(string $column, string $order = 'ASC'): self
+	public function addOrderBy(string $column, string $order = 'ASC'): self
 	{
 		$column = $this->addColumnPrefix($column);
 		$this->select[] = function (QueryBuilder $qb) use ($column, $order) {
 			$qb->addOrderBy($column, $order);
+		};
+
+		return $this;
+	}
+
+	/**
+	 * @param string $column
+	 * @param string $order
+	 * @return self
+	 */
+	public function orderBy(string $column, string $order = 'ASC'): self
+	{
+		$column = $this->addColumnPrefix($column);
+		$this->select[] = function (QueryBuilder $qb) use ($column, $order) {
+			$qb->orderBy($column, $order);
 		};
 
 		return $this;
