@@ -168,6 +168,20 @@ abstract class BaseQuery extends QueryObject
 		return $fetch;
 	}
 
+
+	/**
+	 * @param Queryable $repository
+	 * @return object|null
+	 */
+	public function fetchOneOrNull(Queryable $repository) {
+		try {
+			return $this->fetchOne($repository);
+		} catch (\Doctrine\ORM\NoResultException $e) {
+			return NULL;
+		}
+	}
+
+
 	/**
 	 * Spustí postFetch. Nevolat přímo.
 	 * @param Queryable $repository
