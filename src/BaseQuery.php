@@ -15,8 +15,12 @@ abstract class BaseQuery extends QueryObject
 	const SELECT_PAIRS_KEY = 'id';
 	const SELECT_PAIRS_VALUE = null;
 
+	const ORDER_DEFAULT = 'order_default';
+
 	private $selectPairsKey = null;
 	private $selectPairsValue = null;
+
+	protected $selectPrimary = false;
 
 	protected $entityAlias = 'e';
 
@@ -43,6 +47,11 @@ abstract class BaseQuery extends QueryObject
 	 * @var $entityClass
 	 */
 	protected $entityClass = NULL;
+	
+	public function disableDefaultOrder()
+	{
+		unset($this->select[static::ORDER_DEFAULT]);
+	}
 
 	/**
 	 * @param int|int[] $ids
@@ -138,9 +147,23 @@ abstract class BaseQuery extends QueryObject
 		return $this;
 	}
 
-	public function selectScalar($key = null)
+	/**
+	 * @param null $singleValueAssociationField
+	 * @return $this
+	 */
+	public function selectPrimary($singleValueAssociationField = null)
 	{
-		$this->selectPairs($key ?: static::SELECT_PAIRS_KEY, $key ?: static::SELECT_PAIRS_KEY);
+		$this->selectPrimary = true;
+
+		$this->disableDefaultOrder();
+		
+		$this->select[] = function (QueryBuilder $qb) use ($singleValueAssociationField) {
+			$qb->select($singleValueAssociationField ? 'IDENTITY(e.' . $singleValueAssociationField . ') id' : 'e.id');
+
+			if ($singleValueAssociationField) {
+				$qb->groupBy('e. ' . $singleValueAssociationField);
+			}
+		};
 
 		return $this;
 	}
@@ -156,6 +179,14 @@ abstract class BaseQuery extends QueryObject
 				}
 
 				$items[$key] = $this->selectPairsValue ? $item->{'get' . ucfirst($this->selectPairsValue)}() : $item;
+			}
+
+			return $items;
+		}
+
+		if ($this->selectPrimary) {
+			foreach (parent::fetch($repository, AbstractQuery::HYDRATE_SCALAR) as $item) {
+				$items[$item['id']] = $item['id'];
 			}
 
 			return $items;
