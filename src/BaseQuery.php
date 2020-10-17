@@ -53,6 +53,17 @@ abstract class BaseQuery extends QueryObject
 		unset($this->select[static::ORDER_DEFAULT]);
 	}
 
+	public function disableSelects($disableDefaultOrder = false)
+	{
+		foreach ($this->select as $key => $select) {
+			if ($key === static::ORDER_DEFAULT && !$disableDefaultOrder) {
+				continue;
+			}
+
+			unset($this->select[$key]);
+		}
+	}
+
 	/**
 	 * @param int|int[] $ids
 	 * @return $this
@@ -144,6 +155,8 @@ abstract class BaseQuery extends QueryObject
 		$this->selectPairsKey = $key ?: static::SELECT_PAIRS_KEY;
 		$this->selectPairsValue = $value ?: static::SELECT_PAIRS_VALUE;
 
+		$this->disableSelects();
+
 		return $this;
 	}
 
@@ -155,7 +168,7 @@ abstract class BaseQuery extends QueryObject
 	{
 		$this->selectPrimary = true;
 
-		$this->disableDefaultOrder();
+		$this->disableSelects($disableDefaultOrder = true);
 		
 		$this->select[] = function (QueryBuilder $qb) use ($singleValueAssociationField) {
 			$qb->select($singleValueAssociationField ? 'IDENTITY(e.' . $singleValueAssociationField . ') id' : 'e.id');
@@ -188,6 +201,9 @@ abstract class BaseQuery extends QueryObject
 			foreach (parent::fetch($repository, AbstractQuery::HYDRATE_SCALAR) as $item) {
 				$items[$item['id']] = $item['id'];
 			}
+
+			bd ($items);
+			die();
 
 			return $items;
 		}
