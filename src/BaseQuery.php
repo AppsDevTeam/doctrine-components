@@ -202,9 +202,6 @@ abstract class BaseQuery extends QueryObject
 				$items[$item['id']] = $item['id'];
 			}
 
-			bd ($items);
-			die();
-
 			return $items;
 		}
 
