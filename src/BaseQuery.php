@@ -198,6 +198,7 @@ abstract class BaseQuery extends QueryObject
 		}
 
 		if ($this->selectPrimary) {
+			$items = [];
 			foreach (parent::fetch($repository, AbstractQuery::HYDRATE_SCALAR) as $item) {
 				$items[$item['id']] = $item['id'];
 			}
