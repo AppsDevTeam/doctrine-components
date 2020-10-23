@@ -5,7 +5,7 @@ namespace ADT\BaseQuery;
 use Doctrine\ORM\AbstractQuery;
 use Kdyby\Doctrine\QueryObject;
 use Kdyby\Persistence\Queryable;
-use Kdyby\Doctrine\QueryBuilder;
+use Doctrine\ORM\QueryBuilder;
 
 /**
  * See example on https://github.com/Kdyby/Doctrine/blob/master/docs/en/resultset.md
@@ -206,11 +206,11 @@ abstract class BaseQuery extends QueryObject
 			return $items;
 		}
 
-		$fetch = parent::fetch($repository, $hydrationMode);
-		if ($fetch->getFetchJoinCollection() !== $this->fetchJoinCollection) {
-			$fetch->setFetchJoinCollection($this->fetchJoinCollection);
+		$resultSet = parent::fetch($repository, $hydrationMode);
+		if ($resultSet->getFetchJoinCollection() !== $this->fetchJoinCollection) {
+			$resultSet->setFetchJoinCollection($this->fetchJoinCollection);
 		}
-		return $fetch;
+		return $resultSet;
 	}
 
 
