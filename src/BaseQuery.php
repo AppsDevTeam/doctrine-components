@@ -181,8 +181,12 @@ abstract class BaseQuery extends QueryObject
 		return $this;
 	}
 
-	public function fetch(Queryable $repository, $hydrationMode = AbstractQuery::HYDRATE_OBJECT)
+	public function fetch(?Queryable $repository = null, $hydrationMode = AbstractQuery::HYDRATE_OBJECT)
 	{
+		if (is_null($repository)) {
+			$repository = $this->em->getRepository($this->getEntityClass());
+		}
+
 		if ($this->selectPairsKey || $this->selectPairsValue) {
 			$items = [];
 			foreach (parent::fetch($repository, AbstractQuery::HYDRATE_OBJECT) as $item) {
@@ -213,12 +217,14 @@ abstract class BaseQuery extends QueryObject
 		return $resultSet;
 	}
 
+	public function fetchOne(?Queryable $repository = null) {
+		if (is_null($repository)) {
+			$repository = $this->em->getRepository($this->getEntityClass());
+		}
+		return parent::fetchOne($repository);
+	}
 
-	/**
-	 * @param Queryable $repository
-	 * @return object|null
-	 */
-	public function fetchOneOrNull(Queryable $repository) {
+	public function fetchOneOrNull(?Queryable $repository = null) {
 		try {
 			return $this->fetchOne($repository);
 		} catch (\Doctrine\ORM\NoResultException $e) {
