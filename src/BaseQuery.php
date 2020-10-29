@@ -3,6 +3,7 @@
 namespace ADT\BaseQuery;
 
 use Doctrine\ORM\AbstractQuery;
+use Doctrine\ORM\EntityManager;
 use Kdyby\Doctrine\QueryObject;
 use Kdyby\Persistence\Queryable;
 use Doctrine\ORM\QueryBuilder;
@@ -48,6 +49,12 @@ abstract class BaseQuery extends QueryObject
 	 */
 	protected $entityClass = NULL;
 	
+	public EntityManager $em;
+
+	public function __construct(EntityManager $em) {
+		$this->em = $em;
+	}
+
 	public function disableDefaultOrder()
 	{
 		unset($this->select[static::ORDER_DEFAULT]);
