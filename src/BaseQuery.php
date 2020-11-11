@@ -518,7 +518,7 @@ abstract class BaseQuery extends QueryObject
 	 * @return string
 	 */
 	protected function addColumnPrefix(string $column = NULL): string {
-		if (strpos($column, '.') === FALSE) {
+		if ((strpos($column, '.') === FALSE) && (strpos($column, '\\') === FALSE)) {
 			$column = $this->entityAlias . '.' . $column;
 		}
 		return $column;
