@@ -49,9 +49,10 @@ abstract class BaseQuery extends QueryObject
 	 */
 	protected $entityClass = NULL;
 	
-	public EntityManager $em;
+	protected EntityManager $em;
 
-	public function __construct(EntityManager $em) {
+	public function setEntityManager(EntityManager $em)
+	{
 		$this->em = $em;
 	}
 
