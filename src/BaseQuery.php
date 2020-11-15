@@ -288,7 +288,7 @@ abstract class BaseQuery extends QueryObject
 
 	/**
 	 * @param \Kdyby\Doctrine\EntityManager $em
-	 * @param \Kdyby\Doctrine\Entities\BaseEntity[] $rootEntities Jeden typ entit, např. 10x User.
+	 * @param IEntityPostFetchable[] $rootEntities Jeden typ entit, např. 10x User.
 	 * @param string[] $fieldNames Názvy relací v hlavní entitě. Pro zanoření použij '.'. Např. [ 'address' ].
 	 */
 	public static function doPostFetch(\Kdyby\Doctrine\EntityManager $em, array $rootEntities, array $fieldNames): void
@@ -326,7 +326,7 @@ abstract class BaseQuery extends QueryObject
 			$firstRootEntity = $rootEntities[0];
 		}
 
-		if (!is_object($firstRootEntity) || !($firstRootEntity instanceof \Kdyby\Doctrine\Entities\BaseEntity)) {
+		if (!is_object($firstRootEntity) || !($firstRootEntity instanceof IEntityPostFetchable)) {
 			// a není to entita, rychle pryč
 			return;
 		}
@@ -334,7 +334,7 @@ abstract class BaseQuery extends QueryObject
 		// posbíráme ID rootovských entit, např. ID Userů
 		$rootIds = [];
 		foreach ($rootEntities as $rootEntity) {
-			$rootIds[] = $rootEntity->id;
+			$rootIds[] = $rootEntity->getId();
 		}
 
 		// budeme potřebovat data o asociacích z Doctriny
@@ -466,7 +466,7 @@ abstract class BaseQuery extends QueryObject
 						$collections[] = $refCollProperty->getValue($rootEntity);
 					} elseif (isset($manyToManyMapping)) {
 						foreach ($manyToManyMapping as $mapping) {
-							if ($mapping['childEntityId'] !== $row->id) {
+							if ($mapping['childEntityId'] !== $row->getId()) {
 								continue;
 							}
 
