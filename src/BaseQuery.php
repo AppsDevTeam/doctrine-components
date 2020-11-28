@@ -51,6 +51,11 @@ abstract class BaseQuery extends QueryObject
 	
 	protected EntityManager $em;
 
+	public function getEntityManager()
+	{
+		return $this->em;
+	}
+
 	public function setEntityManager(EntityManager $em)
 	{
 		$this->em = $em;
@@ -596,7 +601,7 @@ abstract class BaseQuery extends QueryObject
 		return $qb;
 	}
 
-	private function getEntityClass(): string
+	protected function getEntityClass(): string
 	{
 		if ($this->entityClass) {
 			return $this->entityClass;
