@@ -468,7 +468,10 @@ abstract class BaseQuery extends QueryObject
 					$collections = [];
 
 					if ($association['type'] !== \Doctrine\ORM\Mapping\ClassMetadata::MANY_TO_MANY) {
-						$rootEntity = $row->{$propertyName};
+						$reflector = new \ReflectionClass($row);
+						$property = $reflector->getProperty($propertyName);
+						$property->setAccessible(true);
+						$rootEntity = $property->getValue($row);
 						$collections[] = $refCollProperty->getValue($rootEntity);
 					} elseif (isset($manyToManyMapping)) {
 						foreach ($manyToManyMapping as $mapping) {
