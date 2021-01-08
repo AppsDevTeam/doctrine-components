@@ -64,6 +64,8 @@ abstract class BaseQuery extends QueryObject
 	public function disableDefaultOrder()
 	{
 		unset($this->select[static::ORDER_DEFAULT]);
+
+		return $this;
 	}
 
 	public function disableSelects($disableDefaultOrder = false)
@@ -138,7 +140,7 @@ abstract class BaseQuery extends QueryObject
 	 */
 	public function addOrderBy(string $column, string $order = 'ASC'): self
 	{
-		if (property_exists($this->entityClass, $column)) {
+		if (property_exists($this->getEntityClass(), $column)) {
 			$column = $this->addColumnPrefix($column);
 		}
 		$this->select[] = function (QueryBuilder $qb) use ($column, $order) {
@@ -155,7 +157,7 @@ abstract class BaseQuery extends QueryObject
 	 */
 	public function orderBy(string $column, string $order = 'ASC'): self
 	{
-		if (property_exists($this->entityClass, $column)) {
+		if (property_exists($this->getEntityClass(), $column)) {
 			$column = $this->addColumnPrefix($column);
 		}
 		$this->select[] = function (QueryBuilder $qb) use ($column, $order) {
