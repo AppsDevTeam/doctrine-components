@@ -85,7 +85,7 @@ abstract class BaseQuery extends QueryObject
 	 * @param int|int[] $ids
 	 * @return $this
 	 */
-	public function byId($id): BaseQuery
+	public function byId($id): static
 	{
 		$this->filter[] = function (QueryBuilder $qb) use ($id) {
 			$qb->andWhere('e.id IN (:id)')
