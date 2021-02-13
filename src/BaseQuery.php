@@ -80,16 +80,17 @@ abstract class BaseQuery extends QueryObject
 
 		return $this;
 	}
-
+	
 	/**
-	 * @param int|int[] $ids
-	 * @return static
+	 * @param int|int[] $id
+	 * @param bool $orWhere
+	 * @return \App\Model\Queries\BaseQuery
 	 */
-	public function byId($id)
+	public function byId($id, bool $orWhere = false): \App\Model\Queries\BaseQuery
 	{
-		$this->filter[] = function (QueryBuilder $qb) use ($id) {
-			$qb->andWhere('e.id IN (:id)')
-				->setParameter(':id', $id);
+		$this->filter[] = function (\Doctrine\ORM\QueryBuilder $qb) use ($id, $orWhere) {
+			call_user_func([$qb, $orWhere ? 'orWhere' : 'andWhere'], 'e.id IN (:id)');
+			$qb->setParameter(':id', $id);
 		};
 
 		return $this;
