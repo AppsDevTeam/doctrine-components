@@ -107,7 +107,7 @@ abstract class BaseQuery extends QueryObject
 	{
 		$this->filter[] = function (\Doctrine\ORM\QueryBuilder $qb) use ($id, $orWhere) {
 			call_user_func([$qb, $orWhere ? 'orWhere' : 'andWhere'], 'e.id IN (:id)');
-			$qb->setParameter(':id', $id);
+			$qb->setParameter('id', $id);
 		};
 	}
 
