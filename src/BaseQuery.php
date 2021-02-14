@@ -82,17 +82,33 @@ abstract class BaseQuery extends QueryObject
 	}
 
 	/**
-	 * @param int|int[] $ids
+	 * @param int|int[] $id
 	 * @return static
 	 */
 	public function byId($id)
 	{
-		$this->filter[] = function (QueryBuilder $qb) use ($id) {
-			$qb->andWhere('e.id IN (:id)')
-				->setParameter(':id', $id);
-		};
+		$this->commonById($id);
 
 		return $this;
+	}
+
+	/**
+	 * @param int|int[] $id
+	 * @return static
+	 */
+	public function orById($id)
+	{
+		$this->commonById($id, true);
+
+		return $this;
+	}
+	
+	private function commonById($id, bool $orWhere = false): void
+	{
+		$this->filter[] = function (\Doctrine\ORM\QueryBuilder $qb) use ($id, $orWhere) {
+			call_user_func([$qb, $orWhere ? 'orWhere' : 'andWhere'], 'e.id IN (:id)');
+			$qb->setParameter('id', $id);
+		};
 	}
 
 	/**
