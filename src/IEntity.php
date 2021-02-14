@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace ADT\BaseQuery;
 
 
-interface IEntityPostFetchable {
+interface IEntity {
 
 	public function getId();
 
