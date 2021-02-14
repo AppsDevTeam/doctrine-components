@@ -82,7 +82,7 @@ abstract class BaseQuery extends QueryObject
 	}
 
 	/**
-	 * @param int|int[] $id
+	 * @param int|int[]|IEntity|Ientity[] $id
 	 * @return static
 	 */
 	public function byId($id)
@@ -93,7 +93,7 @@ abstract class BaseQuery extends QueryObject
 	}
 
 	/**
-	 * @param int|int[] $id
+	 * @param int|int[]|IEntity|Ientity[] $id
 	 * @return static
 	 */
 	public function orById($id)
@@ -318,7 +318,7 @@ abstract class BaseQuery extends QueryObject
 
 	/**
 	 * @param \Kdyby\Doctrine\EntityManager $em
-	 * @param IEntityPostFetchable[] $rootEntities Jeden typ entit, např. 10x User.
+	 * @param IEntity[] $rootEntities Jeden typ entit, např. 10x User.
 	 * @param string[] $fieldNames Názvy relací v hlavní entitě. Pro zanoření použij '.'. Např. [ 'address' ].
 	 */
 	public static function doPostFetch(\Kdyby\Doctrine\EntityManager $em, array $rootEntities, array $fieldNames): void
@@ -356,7 +356,7 @@ abstract class BaseQuery extends QueryObject
 			$firstRootEntity = $rootEntities[0];
 		}
 
-		if (!is_object($firstRootEntity) || !($firstRootEntity instanceof IEntityPostFetchable)) {
+		if (!is_object($firstRootEntity) || !($firstRootEntity instanceof IEntity)) {
 			// a není to entita, rychle pryč
 			return;
 		}
