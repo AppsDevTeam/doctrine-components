@@ -82,7 +82,7 @@ abstract class BaseQuery extends QueryObject
 	}
 
 	/**
-	 * @param int|int[]|IEntity|Ientity[] $id
+	 * @param int|int[]|IEntity|IEntity[] $id
 	 * @return static
 	 */
 	public function byId($id)
@@ -93,7 +93,7 @@ abstract class BaseQuery extends QueryObject
 	}
 
 	/**
-	 * @param int|int[]|IEntity|Ientity[] $id
+	 * @param int|int[]|IEntity|IEntity[] $id
 	 * @return static
 	 */
 	public function orById($id)
