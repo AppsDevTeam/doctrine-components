@@ -135,6 +135,8 @@ abstract class BaseQuery extends QueryObject
 					} else if (is_scalar($value) && !$strict) {
 						$condition = "$_column LIKE :$paramName";
 						$qb->setParameter($paramName, "%$value%");
+					} else if (is_null($value)) {
+						$condition = "$_column IS NULL";
 					} else {
 						$condition = "$_column = :$paramName";
 						$qb->setParameter($paramName, $value);
