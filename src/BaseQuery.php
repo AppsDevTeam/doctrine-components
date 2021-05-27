@@ -251,7 +251,7 @@ abstract class BaseQuery extends QueryObject
 		}
 
 		$resultSet = parent::fetch($repository, $hydrationMode);
-		if ($resultSet->getFetchJoinCollection() !== $this->fetchJoinCollection) {
+		if ($resultSet instanceof ResultSet && $resultSet->getFetchJoinCollection() !== $this->fetchJoinCollection) {
 			$resultSet->setFetchJoinCollection($this->fetchJoinCollection);
 		}
 		return $resultSet;
