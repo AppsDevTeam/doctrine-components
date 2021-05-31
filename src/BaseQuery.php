@@ -4,6 +4,7 @@ namespace ADT\BaseQuery;
 
 use Doctrine\ORM\AbstractQuery;
 use Doctrine\ORM\EntityManager;
+use Doctrine\ORM\Tools\Pagination\Paginator;
 use Kdyby\Doctrine\QueryObject;
 use Kdyby\Persistence\Queryable;
 use Doctrine\ORM\QueryBuilder;
