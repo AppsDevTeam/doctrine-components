@@ -643,4 +643,13 @@ abstract class BaseQuery extends QueryObject
 
 		return $fullClassEntityName;
 	}
+	
+	public function count(Queryable $repository = null, ResultSet $resultSet = null, Paginator $paginatedQuery = null)
+	{
+		if (is_null($repository)) {
+			$repository = $this->em->getRepository($this->getEntityClass());
+		}
+
+		return parent::count($repository, $resultSet, $paginatedQuery);
+	}
 }
