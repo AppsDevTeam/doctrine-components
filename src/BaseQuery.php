@@ -7,6 +7,7 @@ use Doctrine\ORM\EntityManager;
 use Kdyby\Doctrine\QueryObject;
 use Kdyby\Persistence\Queryable;
 use Doctrine\ORM\QueryBuilder;
+use Kdyby\Doctrine\ResultSet;
 
 /**
  * See example on https://github.com/Kdyby/Doctrine/blob/master/docs/en/resultset.md
