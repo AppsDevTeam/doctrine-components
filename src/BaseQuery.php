@@ -599,7 +599,7 @@ abstract class BaseQuery extends QueryObject
 		return $qb;
 	}
 
-	protected function doCreateCountQuery(Queryable $repository): QueryBuilder
+	protected function doCreateCountQuery(Queryable $repository): ?QueryBuilder
 	{
 		return $this->doCreateBasicQuery($repository)->select('COUNT(e.id)');
 	}
