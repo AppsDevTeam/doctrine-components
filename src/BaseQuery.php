@@ -203,6 +203,14 @@ abstract class BaseQuery extends QueryObject
 	}
 
 	/**
+	 * @return bool
+	 */
+	public function callSelectPairsAuto()
+	{
+		return !$this->selectPairsKey && !$this->selectPairsValue;
+	}
+
+	/**
 	 * @param null $singleValueAssociationField
 	 * @return $this
 	 */
@@ -223,6 +231,12 @@ abstract class BaseQuery extends QueryObject
 		return $this;
 	}
 
+	/**
+	 * @param Queryable|null $repository
+	 * @param int $hydrationMode
+	 * @return array|ResultSet|mixed
+	 * @throws \Exception
+	 */
 	public function fetch(?Queryable $repository = null, $hydrationMode = AbstractQuery::HYDRATE_OBJECT)
 	{
 		if (is_null($repository)) {
@@ -259,6 +273,11 @@ abstract class BaseQuery extends QueryObject
 		return $resultSet;
 	}
 
+	/**
+	 * @param Queryable|null $repository
+	 * @return object
+	 * @throws \Doctrine\ORM\NoResultException
+	 */
 	public function fetchOne(?Queryable $repository = null) {
 		if (is_null($repository)) {
 			$repository = $this->em->getRepository($this->getEntityClass());
@@ -266,6 +285,10 @@ abstract class BaseQuery extends QueryObject
 		return parent::fetchOne($repository);
 	}
 
+	/**
+	 * @param Queryable|null $repository
+	 * @return object|null
+	 */
 	public function fetchOneOrNull(?Queryable $repository = null) {
 		try {
 			return $this->fetchOne($repository);
