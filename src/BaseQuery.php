@@ -25,6 +25,8 @@ abstract class BaseQuery extends QueryObject
 
 	protected $selectPrimary = false;
 
+	protected $orByIdFilter = null;
+
 	protected $entityAlias = 'e';
 
 	/**
@@ -89,7 +91,9 @@ abstract class BaseQuery extends QueryObject
 	 */
 	public function byId($id)
 	{
-		$this->commonById($id);
+		$this->filter[] = function (\Doctrine\ORM\QueryBuilder $qb) use ($id) {
+			$qb->andWhere("e.id IN (:byIdFilter)", $id);
+		};
 
 		return $this;
 	}
@@ -100,17 +104,9 @@ abstract class BaseQuery extends QueryObject
 	 */
 	public function orById($id)
 	{
-		$this->commonById($id, true);
+		$this->orByIdFilter = $id;
 
 		return $this;
-	}
-	
-	private function commonById($id, bool $orWhere = false): void
-	{
-		$this->filter[] = function (\Doctrine\ORM\QueryBuilder $qb) use ($id, $orWhere) {
-			call_user_func([$qb, $orWhere ? 'orWhere' : 'andWhere'], 'e.id IN (:id)');
-			$qb->setParameter('id', $id);
-		};
 	}
 
 	/**
@@ -637,6 +633,10 @@ abstract class BaseQuery extends QueryObject
 
 		foreach ($this->filter as $modifier) {
 			$modifier($qb);
+		}
+
+		if ($this->orByIdFilter && $qb->getDQLPart('where')) {
+			$qb->orWhere('e.id IN (:orByIdFilter)', $this->orByIdFilter);
 		}
 
 		return $qb;
