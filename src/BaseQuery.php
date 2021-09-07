@@ -25,7 +25,8 @@ abstract class BaseQuery extends QueryObject
 
 	protected $selectPrimary = false;
 
-	protected $orByIdFilter = null;
+	/** @var array */
+	protected $orByIdFilter = [];
 
 	protected $entityAlias = 'e';
 
@@ -104,7 +105,22 @@ abstract class BaseQuery extends QueryObject
 	 */
 	public function orById($id)
 	{
-		$this->orByIdFilter = $id;
+		if (is_iterable($id) && !is_string($id)) {
+			foreach ($id as $item) {
+				if (is_object($item)) {
+					$this->orByIdFilter[$item->getId()] = $item->getId();
+				}
+				else {
+					$this->orByIdFilter[$item] = $item;
+				}
+			}
+		}
+		elseif (is_object($id)) {
+			$this->orByIdFilter[$id->getId()] = $id->getId();
+		}
+		else {
+			$this->orByIdFilter[$id] = $id;
+		}
 
 		return $this;
 	}
