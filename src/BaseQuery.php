@@ -656,7 +656,8 @@ abstract class BaseQuery extends QueryObject
 		}
 
 		if ($this->orByIdFilter && $qb->getDQLPart('where')) {
-			$qb->orWhere('e.id IN (:orByIdFilter)', $this->orByIdFilter);
+			$qb->orWhere('e.id IN (:orByIdFilter)')
+				->setParameter('orByIdFilter', $this->orByIdFilter);
 		}
 
 		return $qb;
