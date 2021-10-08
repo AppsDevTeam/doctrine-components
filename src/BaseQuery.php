@@ -624,8 +624,7 @@ abstract class BaseQuery extends QueryObject
 	 */
 	protected function doCreateQuery(Queryable $repository): QueryBuilder
 	{
-		$qb = $this->doCreateBasicQuery($repository)
-			->addSelect('partial e.{id}');
+		$qb = $this->doCreateBasicQuery($repository);
 
 		foreach ($this->select as $modifier) {
 			$modifier($qb);
@@ -636,7 +635,12 @@ abstract class BaseQuery extends QueryObject
 
 	protected function doCreateCountQuery(Queryable $repository): ?QueryBuilder
 	{
-		return $this->doCreateBasicQuery($repository)->select('COUNT(e.id)');
+		$qb = $this->doCreateBasicQuery($repository);
+		if ($qb->getDQLPart('groupBy')) {
+			return null;
+		}
+
+		return $qb->select('COUNT(e.id)');
 	}
 
 	private function doCreateBasicQuery(Queryable $repository): QueryBuilder
