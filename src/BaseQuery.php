@@ -651,7 +651,8 @@ abstract class BaseQuery extends QueryObject
 			->addSelect('e')
 			->from($this->getEntityClass(), 'e');
 
-		foreach ($this->filter as $modifier) {
+		// we need to use a reference to allow adding a filter inside another filter
+		foreach ($this->filter as &$modifier) {
 			$modifier($qb);
 		}
 
