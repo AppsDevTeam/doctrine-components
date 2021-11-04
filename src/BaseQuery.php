@@ -661,9 +661,6 @@ abstract class BaseQuery extends QueryObject
 				->setParameter('orByIdFilter', $this->orByIdFilter);
 		}
 
-		bd ('bbb');
-		bd ($qb->getDQL());
-
 		return $qb;
 	}
 
