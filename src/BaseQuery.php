@@ -28,6 +28,11 @@ abstract class BaseQuery extends QueryObject
 	/** @var array */
 	protected $orByIdFilter = [];
 
+	/**
+	 * @var array|null to distinguish between an unset and an empty array
+	 */
+	protected $byIdFilter = null;
+
 	protected $entityAlias = 'e';
 
 	/**
@@ -87,14 +92,32 @@ abstract class BaseQuery extends QueryObject
 	}
 
 	/**
-	 * @param int|int[]|IEntity|IEntity[] $id
+	 * @param int|int[]|IEntity|IEntity[]|[] $id
 	 * @return static
 	 */
 	public function byId($id)
 	{
-		$this->filter[] = function (\Doctrine\ORM\QueryBuilder $qb) use ($id) {
-			$qb->andWhere("e.id IN (:byIdFilter)", $id);
-		};
+		if (is_iterable($id) && !is_string($id)) {
+			foreach ($id as $item) {
+				if (is_object($item)) {
+					$this->byIdFilter[$item->getId()] = $item->getId();
+				}
+				else {
+					$this->byIdFilter[$item] = $item;
+				}
+			}
+
+			//If we did not fill anything, we want to set an empty array to set the 'id IN (NULL)' in the resulting filters
+			if (count($id) === 0) {
+				$this->byIdFilter = [];
+			}
+		}
+		elseif (is_object($id)) {
+			$this->byIdFilter[$id->getId()] = $id->getId();
+		}
+		else {
+			$this->byIdFilter[$id] = $id;
+		}
 
 		return $this;
 	}
@@ -656,9 +679,16 @@ abstract class BaseQuery extends QueryObject
 			$modifier($qb);
 		}
 
+		//orById
 		if ($this->orByIdFilter && $qb->getDQLPart('where')) {
 			$qb->orWhere('e.id IN (:orByIdFilter)')
 				->setParameter('orByIdFilter', $this->orByIdFilter);
+		}
+
+		//byId
+		if ($this->byIdFilter !== null) {
+			$qb->andWhere('e.id IN (:byIdFilter)')
+				->setParameter('byIdFilter', $this->byIdFilter);
 		}
 
 		return $qb;
