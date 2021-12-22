@@ -92,7 +92,7 @@ abstract class BaseQuery extends QueryObject
 	}
 
 	/**
-	 * @param int|int[]|IEntity|IEntity[]|[] $id
+	 * @param int|int[]|IEntity|IEntity[]|[]|null $id
 	 * @return static
 	 */
 	public function byId($id)
@@ -114,6 +114,10 @@ abstract class BaseQuery extends QueryObject
 		}
 		elseif (is_object($id)) {
 			$this->byIdFilter[$id->getId()] = $id->getId();
+		}
+		//we still want to add 'id IN (null)' if we pass $id=null
+		elseif ($id === null) {
+			$this->byIdFilter = [];
 		}
 		else {
 			$this->byIdFilter[$id] = $id;
