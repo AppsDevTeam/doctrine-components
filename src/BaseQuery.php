@@ -3,7 +3,7 @@
 namespace ADT\BaseQuery;
 
 use Doctrine\ORM\AbstractQuery;
-use Doctrine\ORM\EntityManager;
+use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\Pagination\Paginator;
 use Kdyby\Doctrine\QueryObject;
 use Kdyby\Persistence\Queryable;
@@ -59,14 +59,14 @@ abstract class BaseQuery extends QueryObject
 	 */
 	protected $entityClass = NULL;
 	
-	protected EntityManager $em;
+	protected EntityManagerInterface $em;
 
 	public function getEntityManager()
 	{
 		return $this->em;
 	}
 
-	public function setEntityManager(EntityManager $em)
+	public function setEntityManager(EntityManagerInterface $em)
 	{
 		$this->em = $em;
 	}
@@ -383,11 +383,11 @@ abstract class BaseQuery extends QueryObject
 	}
 
 	/**
-	 * @param \Kdyby\Doctrine\EntityManager $em
+	 * @param EntityManagerInterface $em
 	 * @param IEntity[] $rootEntities Jeden typ entit, např. 10x User.
 	 * @param string[] $fieldNames Názvy relací v hlavní entitě. Pro zanoření použij '.'. Např. [ 'address' ].
 	 */
-	public static function doPostFetch(\Kdyby\Doctrine\EntityManager $em, array $rootEntities, array $fieldNames): void
+	public static function doPostFetch(EntityManagerInterface $em, array $rootEntities, array $fieldNames): void
 	{
 		if (empty($rootEntities)) {
 			return;
