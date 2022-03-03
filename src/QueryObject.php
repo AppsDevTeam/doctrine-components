@@ -2,23 +2,35 @@
 
 namespace ADT\BaseQuery;
 
+use Doctrine;
 use Doctrine\ORM\AbstractQuery;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\Pagination\Paginator;
-use Kdyby\Doctrine\QueryObject;
-use Kdyby\Persistence\Queryable;
+use Doctrine\ORM\EntityRepository;
 use Doctrine\ORM\QueryBuilder;
-use Kdyby\Doctrine\ResultSet;
+use Nette;
 
 /**
- * See example on https://github.com/Kdyby/Doctrine/blob/master/docs/en/resultset.md
  */
-abstract class BaseQuery extends QueryObject
+abstract class QueryObject
 {
+	use Nette\SmartObject;
+
 	const SELECT_PAIRS_KEY = 'id';
 	const SELECT_PAIRS_VALUE = null;
 
 	const ORDER_DEFAULT = 'order_default';
+
+
+	/**
+	 * @var \Doctrine\ORM\Query|null
+	 */
+	private $lastQuery;
+
+	/**
+	 * @var ResultSet
+	 */
+	private $lastResult;
 
 	private $selectPairsKey = null;
 	private $selectPairsValue = null;
@@ -69,6 +81,10 @@ abstract class BaseQuery extends QueryObject
 	public function setEntityManager(EntityManagerInterface $em)
 	{
 		$this->em = $em;
+	}
+
+	public function __construct()
+	{
 	}
 
 	public function disableDefaultOrder()
@@ -271,12 +287,12 @@ abstract class BaseQuery extends QueryObject
 	}
 
 	/**
-	 * @param Queryable|null $repository
+	 * @param EntityRepository|null $repository
 	 * @param int $hydrationMode
 	 * @return array|ResultSet|mixed
 	 * @throws \Exception
 	 */
-	public function fetch(?Queryable $repository = null, $hydrationMode = AbstractQuery::HYDRATE_OBJECT)
+	public function fetch(?EntityRepository $repository = null, $hydrationMode = AbstractQuery::HYDRATE_OBJECT)
 	{
 		if (is_null($repository)) {
 			$repository = $this->em->getRepository($this->getEntityClass());
@@ -284,7 +300,7 @@ abstract class BaseQuery extends QueryObject
 
 		if ($this->selectPairsKey || $this->selectPairsValue) {
 			$items = [];
-			foreach (parent::fetch($repository, AbstractQuery::HYDRATE_OBJECT) as $item) {
+			foreach ($this->doFetch($repository, AbstractQuery::HYDRATE_OBJECT) as $item) {
 				$key = $item->{'get' . ucfirst($this->selectPairsKey)}();
 				if (!is_scalar($key)) {
 					throw new \Exception('The key must not be of type `' . gettype($key) . '`.');
@@ -298,14 +314,14 @@ abstract class BaseQuery extends QueryObject
 
 		if ($this->selectPrimary) {
 			$items = [];
-			foreach (parent::fetch($repository, AbstractQuery::HYDRATE_SCALAR) as $item) {
+			foreach ($this->doFetch($repository, AbstractQuery::HYDRATE_SCALAR) as $item) {
 				$items[$item['id']] = $item['id'];
 			}
 
 			return $items;
 		}
 
-		$resultSet = parent::fetch($repository, $hydrationMode);
+		$resultSet = $this->doFetch($repository, $hydrationMode);
 		if ($resultSet instanceof ResultSet && $resultSet->getFetchJoinCollection() !== $this->fetchJoinCollection) {
 			$resultSet->setFetchJoinCollection($this->fetchJoinCollection);
 		}
@@ -313,22 +329,54 @@ abstract class BaseQuery extends QueryObject
 	}
 
 	/**
-	 * @param Queryable|null $repository
-	 * @return object
-	 * @throws \Doctrine\ORM\NoResultException
+	 * @param \Doctrine\ORM\EntityRepository   $repository
+	 * @param int $hydrationMode
+	 *
+	 * @return ResultSet|array
 	 */
-	public function fetchOne(?Queryable $repository = null) {
-		if (is_null($repository)) {
-			$repository = $this->em->getRepository($this->getEntityClass());
-		}
-		return parent::fetchOne($repository);
+	public function doFetch(EntityRepository $repository, $hydrationMode = AbstractQuery::HYDRATE_OBJECT)
+	{
+		$query = $this->getQuery($repository)
+			->setFirstResult(NULL)
+			->setMaxResults(NULL);
+
+		return $hydrationMode !== AbstractQuery::HYDRATE_OBJECT
+			? $query->execute(NULL, $hydrationMode)
+			: $this->lastResult;
 	}
 
 	/**
-	 * @param Queryable|null $repository
+	 * @param EntityRepository|null $repository
+	 * @return object
+	 * @throws \Doctrine\ORM\NoResultException
+	 */
+	public function fetchOne(?EntityRepository $repository = null) {
+		if (is_null($repository)) {
+			$repository = $this->em->getRepository($this->getEntityClass());
+		}
+
+		$query = $this->getQuery($repository)
+			->setFirstResult(NULL)
+			->setMaxResults(1);
+
+		// getResult has to be called to have consistent result for the postFetch
+		// this is the only way to main the INDEX BY value
+		$singleResult = $query->getResult();
+
+		if (!$singleResult) {
+			throw new Doctrine\ORM\NoResultException(); // simulate getSingleResult()
+		}
+
+		$this->postFetch($repository, new \ArrayIterator($singleResult));
+
+		return array_shift($singleResult);
+	}
+
+	/**
+	 * @param EntityRepository|null $repository
 	 * @return object|null
 	 */
-	public function fetchOneOrNull(?Queryable $repository = null) {
+	public function fetchOneOrNull(?EntityRepository $repository = null) {
 		try {
 			return $this->fetchOne($repository);
 		} catch (\Doctrine\ORM\NoResultException $e) {
@@ -339,11 +387,11 @@ abstract class BaseQuery extends QueryObject
 
 	/**
 	 * Spustí postFetch. Nevolat přímo.
-	 * @param Queryable $repository
+	 * @param EntityRepository $repository
 	 * @param \Iterator $iterator
 	 * @return void
 	 */
-	public function postFetch(Queryable $repository, \Iterator $iterator): void
+	public function postFetch(EntityRepository $repository, \Iterator $iterator): void
 	{
 		if (empty($this->postFetch)) {
 			return;
@@ -365,19 +413,19 @@ abstract class BaseQuery extends QueryObject
 	}
 
 	/**
-	 * @param Queryable $repository
+	 * @param EntityRepository $repository
 	 * @return int
 	 */
-	public function delete(\Kdyby\Persistence\Queryable $repository)
+	public function delete(\Doctrine\ORM\EntityRepository   $repository)
 	{
 		return $this->doCreateDeleteQuery($repository)->getQuery()->execute();
 	}
 
 	/**
-	 * @param Queryable $repository
+	 * @param EntityRepository $repository
 	 * @return \Doctrine\ORM\Query|\Doctrine\ORM\QueryBuilder
 	 */
-	public function toQueryBuilder(\Kdyby\Persistence\Queryable $repository)
+	public function toQueryBuilder(\Doctrine\ORM\EntityRepository   $repository)
 	{
 		return $this->doCreateQuery($repository);
 	}
@@ -646,10 +694,10 @@ abstract class BaseQuery extends QueryObject
 	}
 
 	/**
-	 * @param \Kdyby\Persistence\Queryable $repository
+	 * @param \Doctrine\ORM\EntityRepository   $repository
 	 * @return \Doctrine\ORM\Query|\Doctrine\ORM\QueryBuilder
 	 */
-	protected function doCreateQuery(Queryable $repository): QueryBuilder
+	protected function doCreateQuery(EntityRepository $repository): QueryBuilder
 	{
 		$qb = $this->doCreateBasicQuery($repository);
 
@@ -660,7 +708,7 @@ abstract class BaseQuery extends QueryObject
 		return $qb;
 	}
 
-	protected function doCreateCountQuery(Queryable $repository): ?QueryBuilder
+	protected function doCreateCountQuery(EntityRepository $repository): ?QueryBuilder
 	{
 		$qb = $this->doCreateBasicQuery($repository);
 		if ($qb->getDQLPart('groupBy')) {
@@ -670,7 +718,7 @@ abstract class BaseQuery extends QueryObject
 		return $qb->select('COUNT(e.id)');
 	}
 
-	private function doCreateBasicQuery(Queryable $repository): QueryBuilder
+	private function doCreateBasicQuery(EntityRepository $repository): QueryBuilder
 	{
 		$qb = $repository->createQueryBuilder();
 
@@ -698,7 +746,7 @@ abstract class BaseQuery extends QueryObject
 		return $qb;
 	}
 
-	private function doCreateDeleteQuery(Queryable $repository): QueryBuilder
+	private function doCreateDeleteQuery(EntityRepository $repository): QueryBuilder
 	{
 		$qb = $repository->createQueryBuilder();
 
@@ -723,13 +771,83 @@ abstract class BaseQuery extends QueryObject
 
 		return $fullClassEntityName;
 	}
+
+	/**
+	 * @param \Doctrine\ORM\EntityRepository   $repository
+	 *
+	 * @throws UnexpectedValueException
+	 * @return \Doctrine\ORM\Query
+	 */
+	protected function getQuery(EntityRepository $repository)
+	{
+		$query = $this->toQuery($this->doCreateQuery($repository));
+
+		if ($this->lastQuery instanceof Doctrine\ORM\Query && $query instanceof Doctrine\ORM\Query &&
+			$this->lastQuery->getDQL() === $query->getDQL()) {
+			$query = $this->lastQuery;
+		}
+
+		if ($this->lastQuery !== $query) {
+			$this->lastResult = new ResultSet($query, $this, $repository);
+		}
+
+		return $this->lastQuery = $query;
+	}
 	
-	public function count(Queryable $repository = null, ResultSet $resultSet = null, Paginator $paginatedQuery = null)
+	public function count(EntityRepository $repository = null, ResultSet $resultSet = null, Paginator $paginatedQuery = null)
 	{
 		if (is_null($repository)) {
 			$repository = $this->em->getRepository($this->getEntityClass());
 		}
 
-		return parent::count($repository, $resultSet, $paginatedQuery);
+		if ($query = $this->doCreateCountQuery($repository)) {
+			return (int)$this->toQuery($query)->getSingleScalarResult();
+		}
+
+		if ($paginatedQuery !== NULL) {
+			return $paginatedQuery->count();
+		}
+
+		$query = $this->getQuery($repository)
+			->setFirstResult(NULL)
+			->setMaxResults(NULL);
+
+		$paginatedQuery = new Paginator($query, ($resultSet !== NULL) ? $resultSet->getFetchJoinCollection() : TRUE);
+		$paginatedQuery->setUseOutputWalkers(($resultSet !== NULL) ? $resultSet->getUseOutputWalkers() : NULL);
+
+		return $paginatedQuery->count();
 	}
+
+	/**
+	 * @internal For Debugging purposes only!
+	 * @return \Doctrine\ORM\Query|null
+	 */
+	public function getLastQuery()
+	{
+		return $this->lastQuery;
+	}
+
+	/**
+	 * @param \Doctrine\ORM\QueryBuilder|AbstractQuery $query
+	 * @return Doctrine\ORM\Query
+	 */
+	private function toQuery($query)
+	{
+		if ($query instanceof Doctrine\ORM\QueryBuilder) {
+			$query = $query->getQuery();
+		}
+
+		if (!$query instanceof Doctrine\ORM\Query) {
+			throw new UnexpectedValueException(sprintf(
+				"Method " . get_called_class() . "::doCreateQuery must return " .
+				"instanceof %s or %s, " .
+				(is_object($query) ? 'instance of ' . get_class($query) : gettype($query)) . " given.",
+				\Doctrine\ORM\Query::class,
+				QueryBuilder::class
+			));
+		}
+
+		return $query;
+	}
+
 }
