@@ -166,6 +166,14 @@ abstract class BaseQuery extends QueryObject
 		$this->filter[] = function (QueryBuilder $qb) use ($column, $value, $strict) {
 			$x = array_map(
 				function($_column) use ($qb, $value, $strict) {
+					if (strstr($_column, '.')) {
+						$alias = null;
+						foreach(explode('.', $_column, -1) as $_alias) {
+							$qb->innerJoin($alias ? $alias . '.' . $_alias : $this->addColumnPrefix($_alias), $_alias);
+							$alias = $_alias;
+						}
+					}
+					
 					$rstr = \Nette\Utils\Random::generate(5);
 					$paramName = str_replace('.', '_', $_column) . '_param_' . $rstr;
 					$_column = $this->addColumnPrefix($_column);
