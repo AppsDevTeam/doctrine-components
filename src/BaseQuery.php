@@ -4,6 +4,7 @@ namespace ADT\BaseQuery;
 
 use Doctrine\ORM\AbstractQuery;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\EntityRepository;
 use Doctrine\ORM\Tools\Pagination\Paginator;
 use Kdyby\Doctrine\QueryObject;
 use Kdyby\Persistence\Queryable;
@@ -679,7 +680,11 @@ abstract class BaseQuery extends QueryObject
 
 	private function doCreateBasicQuery(Queryable $repository): QueryBuilder
 	{
-		$qb = $repository->createQueryBuilder();
+		if ($repository instanceof EntityRepository) {
+			$qb = $repository->createQueryBuilder();
+		} else {
+			$qb = $repository->getRepository($this->getEntityClass())->createQueryBuilder();
+		}
 
 		$qb
 			->addSelect('e')
