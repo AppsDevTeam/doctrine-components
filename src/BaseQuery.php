@@ -174,8 +174,7 @@ abstract class BaseQuery extends QueryObject
 						}
 					}
 					
-					$rstr = \Nette\Utils\Random::generate(5);
-					$paramName = str_replace('.', '_', $_column) . '_param_' . $rstr;
+					$paramName = 'searchIn_' . str_replace('.', '_', $_column);
 					$_column = $this->addColumnPrefix($_column);
 
 					if (is_array($value)) {
