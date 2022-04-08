@@ -21,6 +21,9 @@ abstract class BaseQuery extends QueryObject
 
 	const ORDER_DEFAULT = 'order_default';
 
+	const JOIN_INNER = 'innerJoin';
+	const JOIN_LEFT = 'leftJoin';
+
 	private $selectPairsKey = null;
 	private $selectPairsValue = null;
 
@@ -153,6 +156,30 @@ abstract class BaseQuery extends QueryObject
 		return $this;
 	}
 
+	private function addJoins(array $columns, ?string $joinType) {
+		if (!is_null($joinType)) {
+			foreach ($columns as $column) {
+				if (strstr($column, '.')) {
+					$aliases = explode('.', $column, -1);
+					if (count($aliases)) {
+						if ($aliases[0] == $this->entityAlias) {
+							unset($aliases[0]);
+						}
+						$aliasLast = null;
+						foreach ($aliases as $aliasNew) {
+							$join = $aliasLast ? $aliasLast . '.' . $aliasNew : $this->addColumnPrefix($aliasNew);
+							$filterKey = $this->getJoinFilterKey($joinType, $join, $aliasNew);
+							if (!$this->isJoinFilterExisted($filterKey, false)) {
+								$this->commonJoin($joinType, $join, $aliasNew);
+							}
+							$aliasLast = $aliasNew;
+						}
+					}
+				}
+			}
+		}
+	}
+
 	/**
 	 * Obecná metoda na vyhledávání ve více sloupcích (spojení přes OR).
 	 * Podle vyhledávané hodnoty, případně parametru strict (LIKE vs. =), se zvolí typ vyhledávání (IN, LIKE, =).
@@ -162,19 +189,13 @@ abstract class BaseQuery extends QueryObject
 	 * @param bool $strict
 	 * @return $this
 	 */
-	public function searchIn($column, $value, bool $strict = false): self
+	public function searchIn($column, $value, bool $strict = false, ?string $joinType = self::JOIN_INNER): self
 	{
+		$this->addJoins((array)$column, $joinType);
+
 		$this->filter[] = function (QueryBuilder $qb) use ($column, $value, $strict) {
 			$x = array_map(
 				function($_column) use ($qb, $value, $strict) {
-					if (strstr($_column, '.')) {
-						$alias = null;
-						foreach(explode('.', $_column, -1) as $_alias) {
-							$qb->innerJoin($alias ? $alias . '.' . $_alias : $this->addColumnPrefix($_alias), $_alias);
-							$alias = $_alias;
-						}
-					}
-					
 					$paramName = 'searchIn_' . str_replace('.', '_', $_column);
 					$_column = $this->addColumnPrefix($_column);
 
@@ -207,6 +228,8 @@ abstract class BaseQuery extends QueryObject
 	 */
 	public function addOrderBy(string $column, string $order = 'ASC'): self
 	{
+		$this->addJoins((array)$column, self::JOIN_LEFT);
+
 		if (property_exists($this->getEntityClass(), $column)) {
 			$column = $this->addColumnPrefix($column);
 		}
@@ -633,7 +656,7 @@ abstract class BaseQuery extends QueryObject
 	}
 
 	protected function join($join, $alias, $conditionType = null, $condition = null, $indexBy = null): self {
-		return $this->commonJoin(__FUNCTION__, $join, $alias, $conditionType, $condition, $indexBy);
+		return $this->innerJoin($join, $alias, $conditionType, $condition, $indexBy);
 	}
 
 	protected function leftJoin($join, $alias, $conditionType = null, $condition = null, $indexBy = null): self {
@@ -646,11 +669,28 @@ abstract class BaseQuery extends QueryObject
 
 	private function commonJoin($joinType, $join, $alias, $conditionType = null, $condition = null, $indexBy = null): self {
 		$join = $this->addColumnPrefix($join);
-		$filterKey = implode('_', [$joinType, $join, $alias, (string)$conditionType, (string)$condition, (string)$indexBy]);
+		$filterKey = $this->getJoinFilterKey($joinType, $join, $alias, $conditionType, $condition, $indexBy);
 		$this->filter[$filterKey] = function (QueryBuilder $qb) use ($joinType, $join, $alias, $conditionType, $condition, $indexBy) {
 			$qb->$joinType($join, $alias, (string)$conditionType, (string)$condition, (string)$indexBy);
 		};
 		return $this;
+	}
+
+	private function getJoinFilterKey($joinType, $join, $alias, $conditionType = null, $condition = null, $indexBy = null) {
+		return implode('_', [$joinType, $join, $alias, (string)$conditionType, (string)$condition, (string)$indexBy]);
+	}
+
+	private function isJoinFilterExisted($filterKey, bool $withType = true) {
+		if (!$withType) {
+			$filterKey = str_replace(self::JOIN_INNER, '', $filterKey);
+			$filterKey = str_replace(self::JOIN_LEFT, '', $filterKey);
+			$filterKeyInner = self::JOIN_INNER . $filterKey;
+			$filterKeyLeft = self::JOIN_LEFT . $filterKey;
+
+			return isset($this->filter[$filterKeyInner]) || isset($this->filter[$filterKeyLeft]);
+		} else {
+			return isset($this->filter[$filterKey]);
+		}
 	}
 
 	/**
