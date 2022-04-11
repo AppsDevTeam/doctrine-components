@@ -156,7 +156,7 @@ abstract class BaseQuery extends QueryObject
 		return $this;
 	}
 
-	private function addJoins(array $columns, ?string $joinType) {
+	protected function addJoins(array $columns, ?string $joinType) {
 		if (!is_null($joinType)) {
 			foreach ($columns as $column) {
 				if (strstr($column, '.')) {
@@ -169,7 +169,7 @@ abstract class BaseQuery extends QueryObject
 						foreach ($aliases as $aliasNew) {
 							$join = $aliasLast ? $aliasLast . '.' . $aliasNew : $this->addColumnPrefix($aliasNew);
 							$filterKey = $this->getJoinFilterKey($joinType, $join, $aliasNew);
-							if (!$this->isJoinFilterExisted($filterKey, false)) {
+							if (!$this->isAlreadyJoined($filterKey)) {
 								$this->commonJoin($joinType, $join, $aliasNew);
 							}
 							$aliasLast = $aliasNew;
@@ -655,42 +655,38 @@ abstract class BaseQuery extends QueryObject
 		return $column;
 	}
 
-	protected function join($join, $alias, $conditionType = null, $condition = null, $indexBy = null): self {
+	protected function join(string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self {
 		return $this->innerJoin($join, $alias, $conditionType, $condition, $indexBy);
 	}
 
-	protected function leftJoin($join, $alias, $conditionType = null, $condition = null, $indexBy = null): self {
+	protected function leftJoin(string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self {
 		return $this->commonJoin(__FUNCTION__, $join, $alias, $conditionType, $condition, $indexBy);
 	}
 
-	protected function innerJoin($join, $alias, $conditionType = null, $condition = null, $indexBy = null): self {
+	protected function innerJoin(?string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self {
 		return $this->commonJoin(__FUNCTION__, $join, $alias, $conditionType, $condition, $indexBy);
 	}
 
-	private function commonJoin($joinType, $join, $alias, $conditionType = null, $condition = null, $indexBy = null): self {
+	private function commonJoin(string $joinType, string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self {
 		$join = $this->addColumnPrefix($join);
 		$filterKey = $this->getJoinFilterKey($joinType, $join, $alias, $conditionType, $condition, $indexBy);
 		$this->filter[$filterKey] = function (QueryBuilder $qb) use ($joinType, $join, $alias, $conditionType, $condition, $indexBy) {
-			$qb->$joinType($join, $alias, (string)$conditionType, (string)$condition, (string)$indexBy);
+			$qb->$joinType($join, $alias, $conditionType, $condition, $indexBy);
 		};
 		return $this;
 	}
 
-	private function getJoinFilterKey($joinType, $join, $alias, $conditionType = null, $condition = null, $indexBy = null) {
-		return implode('_', [$joinType, $join, $alias, (string)$conditionType, (string)$condition, (string)$indexBy]);
+	private function getJoinFilterKey(string $joinType, string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null) {
+		return implode('_', [$joinType, $join, $alias, $conditionType, $condition, $indexBy]);
 	}
 
-	private function isJoinFilterExisted($filterKey, bool $withType = true) {
-		if (!$withType) {
-			$filterKey = str_replace(self::JOIN_INNER, '', $filterKey);
-			$filterKey = str_replace(self::JOIN_LEFT, '', $filterKey);
-			$filterKeyInner = self::JOIN_INNER . $filterKey;
-			$filterKeyLeft = self::JOIN_LEFT . $filterKey;
+	private function isAlreadyJoined(string $filterKey) {
+		$filterKey = str_replace(self::JOIN_INNER, '', $filterKey);
+		$filterKey = str_replace(self::JOIN_LEFT, '', $filterKey);
+		$filterKeyInner = self::JOIN_INNER . $filterKey;
+		$filterKeyLeft = self::JOIN_LEFT . $filterKey;
 
-			return isset($this->filter[$filterKeyInner]) || isset($this->filter[$filterKeyLeft]);
-		} else {
-			return isset($this->filter[$filterKey]);
-		}
+		return isset($this->filter[$filterKeyInner]) || isset($this->filter[$filterKeyLeft]);
 	}
 
 	/**
