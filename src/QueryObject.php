@@ -300,7 +300,7 @@ abstract class QueryObject
 
 		if ($this->selectPairsKey || $this->selectPairsValue) {
 			$items = [];
-			foreach ($this->doFetch($repository, AbstractQuery::HYDRATE_OBJECT) as $item) {
+			foreach ($this->doFetch($repository) as $item) {
 				$key = $item->{'get' . ucfirst($this->selectPairsKey)}();
 				if (!is_scalar($key)) {
 					throw new \Exception('The key must not be of type `' . gettype($key) . '`.');
@@ -350,7 +350,8 @@ abstract class QueryObject
 	 * @return object
 	 * @throws \Doctrine\ORM\NoResultException
 	 */
-	public function fetchOne(?EntityRepository $repository = null) {
+	public function fetchOne(?EntityRepository $repository = null)
+	{
 		if (is_null($repository)) {
 			$repository = $this->em->getRepository($this->getEntityClass());
 		}
@@ -376,7 +377,8 @@ abstract class QueryObject
 	 * @param EntityRepository|null $repository
 	 * @return object|null
 	 */
-	public function fetchOneOrNull(?EntityRepository $repository = null) {
+	public function fetchOneOrNull(?EntityRepository $repository = null)
+	{
 		try {
 			return $this->fetchOne($repository);
 		} catch (\Doctrine\ORM\NoResultException $e) {
@@ -720,11 +722,7 @@ abstract class QueryObject
 
 	private function doCreateBasicQuery(EntityRepository $repository): QueryBuilder
 	{
-		$qb = $repository->createQueryBuilder();
-
-		$qb
-			->addSelect('e')
-			->from($this->getEntityClass(), 'e');
+		$qb = $repository->createQueryBuilder('e');
 
 		// we need to use a reference to allow adding a filter inside another filter
 		foreach ($this->filter as &$modifier) {
@@ -748,7 +746,7 @@ abstract class QueryObject
 
 	private function doCreateDeleteQuery(EntityRepository $repository): QueryBuilder
 	{
-		$qb = $repository->createQueryBuilder();
+		$qb = $repository->createQueryBuilder('e');
 
 		$qb->delete($this->getEntityClass(), 'e');
 

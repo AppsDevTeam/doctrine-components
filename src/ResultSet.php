@@ -10,6 +10,7 @@
 
 namespace ADT\BaseQuery;
 
+use ADT\BaseQuery\Exception\QueryException;
 use Doctrine\ORM;
 use Doctrine\ORM\ORMException;
 use Doctrine\ORM\Tools\Pagination\Paginator as ResultPaginator;
@@ -308,7 +309,7 @@ class ResultSet implements \Countable, \IteratorAggregate
 	 * @throws QueryException
 	 * @return \ArrayIterator
 	 */
-	public function getIterator($hydrationMode = ORM\AbstractQuery::HYDRATE_OBJECT)
+	public function getIterator($hydrationMode = ORM\AbstractQuery::HYDRATE_OBJECT): \Traversable
 	{
 		if ($this->iterator !== NULL) {
 			return $this->iterator;
@@ -319,7 +320,6 @@ class ResultSet implements \Countable, \IteratorAggregate
 		try {
 			if ($this->fetchJoinCollection && $this->query instanceof ORM\Query && ($this->query->getMaxResults() > 0 || $this->query->getFirstResult() > 0)) {
 				$iterator = $this->createPaginatedQuery($this->query)->getIterator();
-
 			} else {
 				$iterator = new \ArrayIterator($this->query->getResult());
 			}
@@ -331,7 +331,7 @@ class ResultSet implements \Countable, \IteratorAggregate
 			$this->frozen = TRUE;
 			return $this->iterator = $iterator;
 
-		} catch (ORMException $e) {
+		} catch (ORM\Exception\ORMException $e) {
 			throw new QueryException($e, $this->query, $e->getMessage());
 		}
 	}
@@ -352,7 +352,7 @@ class ResultSet implements \Countable, \IteratorAggregate
 	/**
 	 * @return int
 	 */
-	public function count()
+	public function count(): int
 	{
 		return $this->getIterator()->count();
 	}
