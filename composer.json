@@ -1,5 +1,5 @@
 {
-	"name": "adt/base-query",
+	"name": "adt/doctrine-components",
 	"type": "library",
 	"description": "Doctrine components",
 	"keywords": ["appsdevteam", "doctrine"],
