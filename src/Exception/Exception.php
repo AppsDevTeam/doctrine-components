@@ -1,6 +1,6 @@
 <?php
 
-namespace ADT\BaseQuery\Exception;
+namespace ADT\DoctrineComponents\Exception;
 
 
 interface Exception

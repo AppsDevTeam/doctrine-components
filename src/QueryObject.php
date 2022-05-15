@@ -1,7 +1,8 @@
 <?php
 
-namespace ADT\BaseQuery;
+namespace ADT\DoctrineComponents;
 
+use ADT\DoctrineComponents\Exception\UnexpectedValueException;
 use Doctrine;
 use Doctrine\ORM\AbstractQuery;
 use Doctrine\ORM\EntityManagerInterface;
@@ -21,6 +22,8 @@ abstract class QueryObject
 
 	const ORDER_DEFAULT = 'order_default';
 
+	const JOIN_INNER = 'innerJoin';
+	const JOIN_LEFT = 'leftJoin';
 
 	/**
 	 * @var \Doctrine\ORM\Query|null
@@ -168,22 +171,48 @@ abstract class QueryObject
 		return $this;
 	}
 
+	protected function addJoins(array $columns, ?string $joinType)
+	{
+		if (!is_null($joinType)) {
+			foreach ($columns as $column) {
+				if (strstr($column, '.')) {
+					$aliases = explode('.', $column, -1);
+					if (count($aliases)) {
+						if ($aliases[0] == $this->entityAlias) {
+							unset($aliases[0]);
+						}
+						$aliasLast = null;
+						foreach ($aliases as $aliasNew) {
+							$join = $aliasLast ? $aliasLast . '.' . $aliasNew : $this->addColumnPrefix($aliasNew);
+							$filterKey = $this->getJoinFilterKey($joinType, $join, $aliasNew);
+							if (!$this->isAlreadyJoined($filterKey)) {
+								$this->commonJoin($joinType, $join, $aliasNew);
+							}
+							$aliasLast = $aliasNew;
+						}
+					}
+				}
+			}
+		}
+	}
+
 	/**
 	 * Obecná metoda na vyhledávání ve více sloupcích (spojení přes OR).
 	 * Podle vyhledávané hodnoty, případně parametru strict (LIKE vs. =), se zvolí typ vyhledávání (IN, LIKE, =).
 	 *
 	 * @param string|string[] $column
-	 * @param mix $value
+	 * @param mixed $value
 	 * @param bool $strict
 	 * @return $this
 	 */
-	public function searchIn($column, $value, bool $strict = false): self
+	public function searchIn($column, $value, bool $strict = false, ?string $joinType = self::JOIN_INNER): self
 	{
+		$this->addJoins((array)$column, $joinType);
+
 		$this->filter[] = function (QueryBuilder $qb) use ($column, $value, $strict) {
 			$x = array_map(
 				function($_column) use ($qb, $value, $strict) {
-					$rstr = \Nette\Utils\Random::generate(5);
-					$paramName = str_replace('.', '_', $_column) . '_param_' . $rstr;
+					$paramName = 'searchIn_' . str_replace('.', '_', $_column);
 					$_column = $this->addColumnPrefix($_column);
 
 					if (is_array($value)) {
@@ -204,7 +233,6 @@ abstract class QueryObject
 			);
 			$qb->andWhere($qb->expr()->orX(...$x));
 		};
-
 		return $this;
 	}
 
@@ -408,7 +436,7 @@ abstract class QueryObject
 	 * @param string $fieldName Může být název pole (např. "contact") nebo cesta (např. "commission.contract.client").
 	 * @return $this
 	 */
-	public function addPostFetch(string $fieldName): BaseQuery
+	public function addPostFetch(string $fieldName): self
 	{
 		$this->postFetch[] = $fieldName;
 		return $this;
@@ -674,25 +702,44 @@ abstract class QueryObject
 		return $column;
 	}
 
-	protected function join($join, $alias, $conditionType = null, $condition = null, $indexBy = null): self {
+	protected function join(string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
+	{
+		return $this->innerJoin($join, $alias, $conditionType, $condition, $indexBy);
+	}
+
+	protected function leftJoin(string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
+	{
 		return $this->commonJoin(__FUNCTION__, $join, $alias, $conditionType, $condition, $indexBy);
 	}
 
-	protected function leftJoin($join, $alias, $conditionType = null, $condition = null, $indexBy = null): self {
+	protected function innerJoin(?string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
+	{
 		return $this->commonJoin(__FUNCTION__, $join, $alias, $conditionType, $condition, $indexBy);
 	}
 
-	protected function innerJoin($join, $alias, $conditionType = null, $condition = null, $indexBy = null): self {
-		return $this->commonJoin(__FUNCTION__, $join, $alias, $conditionType, $condition, $indexBy);
-	}
-
-	private function commonJoin($joinType, $join, $alias, $conditionType = null, $condition = null, $indexBy = null): self {
+	private function commonJoin(string $joinType, string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
+	{
 		$join = $this->addColumnPrefix($join);
-		$filterKey = implode('_', [$joinType, $join, $alias, (string)$conditionType, (string)$condition, (string)$indexBy]);
+		$filterKey = $this->getJoinFilterKey($joinType, $join, $alias, $conditionType, $condition, $indexBy);
 		$this->filter[$filterKey] = function (QueryBuilder $qb) use ($joinType, $join, $alias, $conditionType, $condition, $indexBy) {
-			$qb->$joinType($join, $alias, (string)$conditionType, (string)$condition, (string)$indexBy);
+			$qb->$joinType($join, $alias, $conditionType, $condition, $indexBy);
 		};
 		return $this;
+	}
+
+	private function getJoinFilterKey(string $joinType, string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null)
+	{
+		return implode('_', [$joinType, $join, $alias, $conditionType, $condition, $indexBy]);
+	}
+
+	private function isAlreadyJoined(string $filterKey)
+	{
+		$filterKey = str_replace(self::JOIN_INNER, '', $filterKey);
+		$filterKey = str_replace(self::JOIN_LEFT, '', $filterKey);
+		$filterKeyInner = self::JOIN_INNER . $filterKey;
+		$filterKeyLeft = self::JOIN_LEFT . $filterKey;
+
+		return isset($this->filter[$filterKeyInner]) || isset($this->filter[$filterKeyLeft]);
 	}
 
 	/**

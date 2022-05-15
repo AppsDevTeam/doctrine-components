@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 
-namespace ADT\BaseQuery\Exception;
+namespace ADT\DoctrineComponents\Exception;
 
 use Doctrine;
 

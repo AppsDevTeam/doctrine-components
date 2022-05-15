@@ -8,7 +8,7 @@
  * For the full copyright and license information, please view the file license.txt that was distributed with this source code.
  */
 
-namespace ADT\BaseQuery;
+namespace ADT\DoctrineComponents;
 
 use Doctrine;
 
@@ -17,12 +17,12 @@ use Doctrine;
 /**
  * @author Filip Procházka <filip@prochazka.su>
  *
- * @method \ADT\BaseQuery\QueryBuilder select(array|string $select = null)
- * @method \ADT\BaseQuery\QueryBuilder addSelect(array|string $select = null)
- * @method \ADT\BaseQuery\QueryBuilder from($from, $alias, $indexBy = null)
- * @method \ADT\BaseQuery\QueryBuilder setMaxResults(int|NULL $maxResults)
- * @method \ADT\BaseQuery\QueryBuilder setFirstResult(int|NULL $maxResults)
- * @method \ADT\BaseQuery\QueryBuilder resetDQLPart(string $part)
+ * @method \ADT\DoctrineComponents\QueryBuilder select(array|string $select = null)
+ * @method \ADT\DoctrineComponents\QueryBuilder addSelect(array|string $select = null)
+ * @method \ADT\DoctrineComponents\QueryBuilder from($from, $alias, $indexBy = null)
+ * @method \ADT\DoctrineComponents\QueryBuilder setMaxResults(int|NULL $maxResults)
+ * @method \ADT\DoctrineComponents\QueryBuilder setFirstResult(int|NULL $maxResults)
+ * @method \ADT\DoctrineComponents\QueryBuilder resetDQLPart(string $part)
  */
 class QueryBuilder extends Doctrine\ORM\QueryBuilder implements \IteratorAggregate
 {

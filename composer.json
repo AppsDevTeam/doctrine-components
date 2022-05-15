@@ -1,8 +1,8 @@
 {
 	"name": "adt/base-query",
 	"type": "library",
-	"description": "Nette abstract query object class",
-	"keywords": ["nette", "appsdevteam", "query object"],
+	"description": "Doctrine components",
+	"keywords": ["appsdevteam", "doctrine"],
 	"homepage": "https://www.appsdevteam.com",
 	"license": ["BSD-3-Clause", "GPL-2.0", "GPL-3.0"],
 	"authors": [
@@ -23,7 +23,7 @@
 	},
 	"autoload": {
 		"psr-4": {
-			"ADT\\BaseQuery\\": "src/"
+			"ADT\\DoctrineComponents\\": "src/"
 		}
 	}
 }

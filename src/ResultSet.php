@@ -8,13 +8,17 @@
  * For the full copyright and license information, please view the file license.txt that was distributed with this source code.
  */
 
-namespace ADT\BaseQuery;
+namespace ADT\DoctrineComponents;
 
-use ADT\BaseQuery\Exception\QueryException;
+use ADT\DoctrineComponents\Exception\InvalidArgumentException;
+use ADT\DoctrineComponents\Exception\InvalidStateException;
+use ADT\DoctrineComponents\Exception\QueryException;
+use Countable;
 use Doctrine\ORM;
 use Doctrine\ORM\ORMException;
 use Doctrine\ORM\Tools\Pagination\Paginator as ResultPaginator;
 use Doctrine\ORM\EntityRepository;
+use IteratorAggregate;
 use Nette\Utils\Strings;
 use Nette\Utils\Paginator as UIPaginator;
 
@@ -42,7 +46,7 @@ use Nette\Utils\Paginator as UIPaginator;
  *
  * @author Filip Procházka <filip@prochazka.su>
  */
-class ResultSet implements \Countable, \IteratorAggregate
+class ResultSet implements Countable, IteratorAggregate
 {
 
 	/**
@@ -56,7 +60,7 @@ class ResultSet implements \Countable, \IteratorAggregate
 	private $query;
 
 	/**
-	 * @var \ADT\BaseQuery\QueryObject|NULL
+	 * @var QueryObject|NULL
 	 */
 	private $queryObject;
 
@@ -89,10 +93,10 @@ class ResultSet implements \Countable, \IteratorAggregate
 
 	/**
 	 * @param ORM\AbstractQuery $query
-	 * @param \ADT\BaseQuery\QueryObject $queryObject
+	 * @param QueryObject $queryObject
 	 * @param \Doctrine\ORM\EntityRepository   $repository
 	 */
-	public function __construct(ORM\AbstractQuery $query, \ADT\BaseQuery\QueryObject $queryObject = NULL, EntityRepository $repository = NULL)
+	public function __construct(ORM\AbstractQuery $query, QueryObject $queryObject = NULL, EntityRepository $repository = NULL)
 	{
 		$this->query = $query;
 		$this->queryObject = $queryObject;
@@ -366,7 +370,7 @@ class ResultSet implements \Countable, \IteratorAggregate
 	private function createPaginatedQuery(ORM\AbstractQuery $query)
 	{
 		if (!$query instanceof ORM\Query) {
-			throw new InvalidArgumentException(sprintf('\ADT\BaseQuery\QueryObject pagination only works with %s', \Doctrine\ORM\Query::class));
+			throw new InvalidArgumentException(sprintf('\ADT\DoctrineComponents\QueryObject pagination only works with %s', \Doctrine\ORM\Query::class));
 		}
 
 		$paginated = new ResultPaginator($query, $this->fetchJoinCollection);
