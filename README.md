@@ -1,4 +1,10 @@
-# BaseQuery
+# Doctrine Components
+
+## Install
+
+```
+composer require adt/doctrine-components
+```
 
 ## Using `searchIn` and `*Join`
 
