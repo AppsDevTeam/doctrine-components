@@ -214,6 +214,7 @@ abstract class QueryObject
 				function($_column) use ($qb, $value, $strict) {
 					$paramName = 'searchIn_' . str_replace('.', '_', $_column);
 					$_column = $this->addColumnPrefix($_column);
+					$_column = $this->getJoinedEntityColumnName($_column);
 
 					if (is_array($value)) {
 						$condition = "$_column IN (:$paramName)";
@@ -234,6 +235,10 @@ abstract class QueryObject
 			$qb->andWhere($qb->expr()->orX(...$x));
 		};
 		return $this;
+	}
+
+	private function getJoinedEntityColumnName(string $column): string {
+		return implode('.', array_slice(explode('.', $column), -2));
 	}
 
 	/**
