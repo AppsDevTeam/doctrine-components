@@ -2,21 +2,15 @@
 
 namespace ADT\DoctrineComponents;
 
-use ADT\DoctrineComponents\Exception\UnexpectedValueException;
+use Closure;
 use Doctrine;
 use Doctrine\ORM\AbstractQuery;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\Pagination\Paginator;
-use Doctrine\ORM\EntityRepository;
+use Doctrine\ORM\NoResultException;
 use Doctrine\ORM\QueryBuilder;
-use Nette;
 
-/**
- */
 abstract class QueryObject
 {
-	use Nette\SmartObject;
-
 	const SELECT_PAIRS_KEY = 'id';
 	const SELECT_PAIRS_VALUE = null;
 
@@ -25,58 +19,32 @@ abstract class QueryObject
 	const JOIN_INNER = 'innerJoin';
 	const JOIN_LEFT = 'leftJoin';
 
-	/**
-	 * @var \Doctrine\ORM\Query|null
-	 */
-	private $lastQuery;
-
-	/**
-	 * @var ResultSet
-	 */
-	private $lastResult;
-
 	private $selectPairsKey = null;
 	private $selectPairsValue = null;
 
 	protected $selectPrimary = false;
 
-	/** @var array */
-	protected $orByIdFilter = [];
+	protected array $orByIdFilter = [];
 
-	/**
-	 * @var array|null to distinguish between an unset and an empty array
-	 */
-	protected $byIdFilter = null;
+	protected ?array $byIdFilter = null;
 
-	protected $entityAlias = 'e';
+	protected string $entityAlias = 'e';
 
-	/**
-	 * @var array|\Closure[]
-	 */
+	/** @var Closure[] */
 	protected array $filter = [];
 
-	/**
-	 * @var array|\Closure[]
-	 */
+	/** @var Closure[] */
 	protected array $select = [];
 
-	/**
-	 * @var array
-	 */
+	protected array $hints = [];
+
 	protected array $postFetch = [];
 
-	/** @var bool */
-	protected bool $fetchJoinCollection = FALSE;
-
-	/**
-	 * Jaká entita se bude filtrovat.
-	 * @var $entityClass
-	 */
-	protected $entityClass = NULL;
+	protected ?string $entityClass = NULL;
 	
 	protected EntityManagerInterface $em;
 
-	public function getEntityManager()
+	public function getEntityManager(): EntityManagerInterface
 	{
 		return $this->em;
 	}
@@ -86,10 +54,9 @@ abstract class QueryObject
 		$this->em = $em;
 	}
 
-	public function __construct()
-	{
-	}
-
+	/**
+	 * @return static
+	 */
 	public function disableDefaultOrder()
 	{
 		unset($this->select[static::ORDER_DEFAULT]);
@@ -278,9 +245,8 @@ abstract class QueryObject
 	/**
 	 * @param null $value Default to static::SELECT_PAIRS_VALUE or null, which returns the entire entity
 	 * @param null $key Default to static::SELECT_PAIRS_KEY or 'id'
-	 * @return $this
 	 */
-	public function selectPairs($value = null, $key = null)
+	public function selectPairs($value = null, $key = null): self
 	{
 		$this->selectPairsKey = $key ?: static::SELECT_PAIRS_KEY;
 		$this->selectPairsValue = $value ?: static::SELECT_PAIRS_VALUE;
@@ -290,19 +256,12 @@ abstract class QueryObject
 		return $this;
 	}
 
-	/**
-	 * @return bool
-	 */
-	public function callSelectPairsAuto()
+	public function callSelectPairsAuto(): bool
 	{
 		return !$this->selectPairsKey && !$this->selectPairsValue;
 	}
 
-	/**
-	 * @param null $singleValueAssociationField
-	 * @return $this
-	 */
-	public function selectPrimary($singleValueAssociationField = null)
+	public function selectPrimary(string $singleValueAssociationField = null): self
 	{
 		$this->selectPrimary = true;
 
@@ -320,120 +279,17 @@ abstract class QueryObject
 	}
 
 	/**
-	 * @param EntityRepository|null $repository
-	 * @param int $hydrationMode
-	 * @return array|ResultSet|mixed
-	 * @throws \Exception
-	 */
-	public function fetch(?EntityRepository $repository = null, $hydrationMode = AbstractQuery::HYDRATE_OBJECT)
-	{
-		if (is_null($repository)) {
-			$repository = $this->em->getRepository($this->getEntityClass());
-		}
-
-		if ($this->selectPairsKey || $this->selectPairsValue) {
-			$items = [];
-			foreach ($this->doFetch($repository) as $item) {
-				$key = $item->{'get' . ucfirst($this->selectPairsKey)}();
-				if (!is_scalar($key)) {
-					throw new \Exception('The key must not be of type `' . gettype($key) . '`.');
-				}
-
-				$items[$key] = $this->selectPairsValue ? $item->{'get' . ucfirst($this->selectPairsValue)}() : $item;
-			}
-
-			return $items;
-		}
-
-		if ($this->selectPrimary) {
-			$items = [];
-			foreach ($this->doFetch($repository, AbstractQuery::HYDRATE_SCALAR) as $item) {
-				$items[$item['id']] = $item['id'];
-			}
-
-			return $items;
-		}
-
-		$resultSet = $this->doFetch($repository, $hydrationMode);
-		if ($resultSet instanceof ResultSet && $resultSet->getFetchJoinCollection() !== $this->fetchJoinCollection) {
-			$resultSet->setFetchJoinCollection($this->fetchJoinCollection);
-		}
-		return $resultSet;
-	}
-
-	/**
-	 * @param \Doctrine\ORM\EntityRepository   $repository
-	 * @param int $hydrationMode
-	 *
-	 * @return ResultSet|array
-	 */
-	public function doFetch(EntityRepository $repository, $hydrationMode = AbstractQuery::HYDRATE_OBJECT)
-	{
-		$query = $this->getQuery($repository)
-			->setFirstResult(NULL)
-			->setMaxResults(NULL);
-
-		return $hydrationMode !== AbstractQuery::HYDRATE_OBJECT
-			? $query->execute(NULL, $hydrationMode)
-			: $this->lastResult;
-	}
-
-	/**
-	 * @param EntityRepository|null $repository
-	 * @return object
-	 * @throws \Doctrine\ORM\NoResultException
-	 */
-	public function fetchOne(?EntityRepository $repository = null)
-	{
-		if (is_null($repository)) {
-			$repository = $this->em->getRepository($this->getEntityClass());
-		}
-
-		$query = $this->getQuery($repository)
-			->setFirstResult(NULL)
-			->setMaxResults(1);
-
-		// getResult has to be called to have consistent result for the postFetch
-		// this is the only way to main the INDEX BY value
-		$singleResult = $query->getResult();
-
-		if (!$singleResult) {
-			throw new Doctrine\ORM\NoResultException(); // simulate getSingleResult()
-		}
-
-		$this->postFetch($repository, new \ArrayIterator($singleResult));
-
-		return array_shift($singleResult);
-	}
-
-	/**
-	 * @param EntityRepository|null $repository
-	 * @return object|null
-	 */
-	public function fetchOneOrNull(?EntityRepository $repository = null)
-	{
-		try {
-			return $this->fetchOne($repository);
-		} catch (\Doctrine\ORM\NoResultException $e) {
-			return NULL;
-		}
-	}
-
-
-	/**
 	 * Spustí postFetch. Nevolat přímo.
-	 * @param EntityRepository $repository
-	 * @param \Iterator $iterator
-	 * @return void
+	 * @internal
 	 */
-	public function postFetch(EntityRepository $repository, \Iterator $iterator): void
+	public function postFetch(\Iterator $iterator): void
 	{
 		if (empty($this->postFetch)) {
 			return;
 		}
 
 		$rootEntities = iterator_to_array($iterator, TRUE);
-		static::doPostFetch($repository->getEntityManager(), $rootEntities, $this->postFetch);
+		static::doPostFetch($this->getEntityManager(), $rootEntities, $this->postFetch);
 	}
 
 	/**
@@ -447,24 +303,117 @@ abstract class QueryObject
 		return $this;
 	}
 
-	/**
-	 * @param EntityRepository $repository
-	 * @return int
-	 */
-	public function delete(\Doctrine\ORM\EntityRepository   $repository)
+	public function getResultSet(int $page = 1, ?int $itemsPerPage = null): ResultSet
 	{
-		return $this->doCreateDeleteQuery($repository)->getQuery()->execute();
+		return new ResultSet($this, $page, $itemsPerPage);
 	}
 
 	/**
-	 * @param EntityRepository $repository
-	 * @return \Doctrine\ORM\Query|\Doctrine\ORM\QueryBuilder
+	 * @throws Doctrine\ORM\NonUniqueResultException
+	 * @throws NoResultException
 	 */
-	public function toQueryBuilder(\Doctrine\ORM\EntityRepository   $repository)
+	public function count(): int
 	{
-		return $this->doCreateQuery($repository);
+		$qb = $this->doCreateBasicQuery();
+
+		if ($qb->getDQLPart('groupBy')) {
+			throw new \Exception ('Count is not allowed to combine with groupBy statement.');
+		}
+
+		$query = $this->getQuery($qb->select('COUNT(e.id)'));
+
+		return (int) $query->getSingleScalarResult();
 	}
 
+	public function fetch(?int $limit = null): \Traversable
+	{
+		$qb = $this->doCreateBasicQuery();
+
+		foreach ($this->select as $modifier) {
+			$modifier($qb);
+		}
+
+		$query = $this->getQuery($qb);
+
+		if ($limit) {
+			$query->setMaxResults($limit);
+		}
+
+		return $query->getResult();
+	}
+
+	/**
+	 * @throws \Exception
+	 */
+	public function fetchPairs(?string $selectPairsValue, string $selectPairsKey = null): array
+	{
+		if ($this->select) {
+			throw new \Exception('You cannot call "fetchPairs()" when "select()" or "addSelect()" was used.');
+		}
+
+		$items = [];
+		foreach ($this->fetch() as $item) {
+			$key = $item->{'get' . ucfirst($selectPairsKey)}();
+			if (!is_scalar($key)) {
+				throw new \Exception('The key must not be of type `' . gettype($key) . '`.');
+			}
+
+			$items[$key] = $selectPairsValue ? $item->{'get' . ucfirst($selectPairsValue)}() : $item;
+		}
+
+		return $items;
+	}
+
+	public function fetchPrimary(string $singleValueAssociationField = null): array
+	{
+		if ($this->select) {
+			throw new \Exception('You cannot call "fetchPrimary()" when "select()" or "addSelect()" was used.');
+		}
+
+		$qb = $this->doCreateBasicQuery();
+
+		$qb->select($singleValueAssociationField ? 'IDENTITY(e.' . $singleValueAssociationField . ') id' : 'e.id');
+
+		if ($singleValueAssociationField) {
+			$qb->groupBy('e. ' . $singleValueAssociationField);
+		}
+
+		$query = $this->getQuery($qb);
+
+		$items = [];
+		foreach ($query->getResult(AbstractQuery::HYDRATE_SCALAR) as $item) {
+			$items[$item['id']] = $item['id'];
+		}
+
+		return $items;
+	}
+
+	/**
+	 * @throws NoResultException
+	 */
+	public function fetchOne(): object
+	{
+		$singleResult = iterator_to_array($this->fetch(1));
+
+		if (!$singleResult) {
+			throw new NoResultException(); // simulate getSingleResult()
+		}
+
+		// TODO
+		// $this->postFetch(new \ArrayIterator($singleResult));
+
+		return array_shift($singleResult);
+	}
+
+	public function fetchOneOrNull(): ?object
+	{
+		try {
+			return $this->fetchOne();
+		} catch (NoResultException $e) {
+			return null;
+		}
+	}
+	
 	/**
 	 * @param EntityManagerInterface $em
 	 * @param IEntity[] $rootEntities Jeden typ entit, např. 10x User.
@@ -696,28 +645,38 @@ abstract class QueryObject
 		}
 	}
 
-	/**
-	 * @param string|null $column
-	 * @return string
-	 */
-	protected function addColumnPrefix(string $column = NULL): string {
+	protected function getEntityClass(): string
+	{
+		if ($this->entityClass) {
+			return $this->entityClass;
+		}
+
+		$fullClassQueryName = get_class($this);
+		$fullClassEntityName = str_replace("Queries", "Entity", $fullClassQueryName);
+		$fullClassEntityName = str_replace("Query", "", $fullClassEntityName);
+
+		return $fullClassEntityName;
+	}
+
+	protected function addColumnPrefix(?string $column = NULL): string
+	{
 		if ((strpos($column, '.') === FALSE) && (strpos($column, '\\') === FALSE)) {
 			$column = $this->entityAlias . '.' . $column;
 		}
 		return $column;
 	}
 
-	protected function join(string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
+	private function join(string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
 	{
 		return $this->innerJoin($join, $alias, $conditionType, $condition, $indexBy);
 	}
 
-	protected function leftJoin(string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
+	private function leftJoin(string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
 	{
 		return $this->commonJoin(__FUNCTION__, $join, $alias, $conditionType, $condition, $indexBy);
 	}
 
-	protected function innerJoin(?string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
+	private function innerJoin(?string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
 	{
 		return $this->commonJoin(__FUNCTION__, $join, $alias, $conditionType, $condition, $indexBy);
 	}
@@ -747,34 +706,9 @@ abstract class QueryObject
 		return isset($this->filter[$filterKeyInner]) || isset($this->filter[$filterKeyLeft]);
 	}
 
-	/**
-	 * @param \Doctrine\ORM\EntityRepository   $repository
-	 * @return \Doctrine\ORM\Query|\Doctrine\ORM\QueryBuilder
-	 */
-	protected function doCreateQuery(EntityRepository $repository): QueryBuilder
+	private function doCreateBasicQuery(): QueryBuilder
 	{
-		$qb = $this->doCreateBasicQuery($repository);
-
-		foreach ($this->select as $modifier) {
-			$modifier($qb);
-		}
-
-		return $qb;
-	}
-
-	protected function doCreateCountQuery(EntityRepository $repository): ?QueryBuilder
-	{
-		$qb = $this->doCreateBasicQuery($repository);
-		if ($qb->getDQLPart('groupBy')) {
-			return null;
-		}
-
-		return $qb->select('COUNT(e.id)');
-	}
-
-	private function doCreateBasicQuery(EntityRepository $repository): QueryBuilder
-	{
-		$qb = $repository->createQueryBuilder('e');
+		$qb = $this->em->getRepository($this->getEntityClass())->createQueryBuilder('e');
 
 		// we need to use a reference to allow adding a filter inside another filter
 		foreach ($this->filter as &$modifier) {
@@ -796,108 +730,14 @@ abstract class QueryObject
 		return $qb;
 	}
 
-	private function doCreateDeleteQuery(EntityRepository $repository): QueryBuilder
+	private function getQuery(QueryBuilder $qb): Doctrine\ORM\Query
 	{
-		$qb = $repository->createQueryBuilder('e');
+		$query = $qb->getQuery();
 
-		$qb->delete($this->getEntityClass(), 'e');
-
-		foreach ($this->filter as $modifier) {
-			$modifier($qb);
-		}
-
-		return $qb;
-	}
-
-	protected function getEntityClass(): string
-	{
-		if ($this->entityClass) {
-			return $this->entityClass;
-		}
-
-		$fullClassQueryName = get_class($this);
-		$fullClassEntityName = str_replace("Queries", "Entity", $fullClassQueryName);
-		$fullClassEntityName = str_replace("Query", "", $fullClassEntityName);
-
-		return $fullClassEntityName;
-	}
-
-	/**
-	 * @param \Doctrine\ORM\EntityRepository   $repository
-	 *
-	 * @throws UnexpectedValueException
-	 * @return \Doctrine\ORM\Query
-	 */
-	protected function getQuery(EntityRepository $repository)
-	{
-		$query = $this->toQuery($this->doCreateQuery($repository));
-
-		if ($this->lastQuery instanceof Doctrine\ORM\Query && $query instanceof Doctrine\ORM\Query &&
-			$this->lastQuery->getDQL() === $query->getDQL()) {
-			$query = $this->lastQuery;
-		}
-
-		if ($this->lastQuery !== $query) {
-			$this->lastResult = new ResultSet($query, $this, $repository);
-		}
-
-		return $this->lastQuery = $query;
-	}
-	
-	public function count(EntityRepository $repository = null, ResultSet $resultSet = null, Paginator $paginatedQuery = null)
-	{
-		if (is_null($repository)) {
-			$repository = $this->em->getRepository($this->getEntityClass());
-		}
-
-		if ($query = $this->doCreateCountQuery($repository)) {
-			return (int)$this->toQuery($query)->getSingleScalarResult();
-		}
-
-		if ($paginatedQuery !== NULL) {
-			return $paginatedQuery->count();
-		}
-
-		$query = $this->getQuery($repository)
-			->setFirstResult(NULL)
-			->setMaxResults(NULL);
-
-		$paginatedQuery = new Paginator($query, ($resultSet !== NULL) ? $resultSet->getFetchJoinCollection() : TRUE);
-		$paginatedQuery->setUseOutputWalkers(($resultSet !== NULL) ? $resultSet->getUseOutputWalkers() : NULL);
-
-		return $paginatedQuery->count();
-	}
-
-	/**
-	 * @internal For Debugging purposes only!
-	 * @return \Doctrine\ORM\Query|null
-	 */
-	public function getLastQuery()
-	{
-		return $this->lastQuery;
-	}
-
-	/**
-	 * @param \Doctrine\ORM\QueryBuilder|AbstractQuery $query
-	 * @return Doctrine\ORM\Query
-	 */
-	private function toQuery($query)
-	{
-		if ($query instanceof Doctrine\ORM\QueryBuilder) {
-			$query = $query->getQuery();
-		}
-
-		if (!$query instanceof Doctrine\ORM\Query) {
-			throw new UnexpectedValueException(sprintf(
-				"Method " . get_called_class() . "::doCreateQuery must return " .
-				"instanceof %s or %s, " .
-				(is_object($query) ? 'instance of ' . get_class($query) : gettype($query)) . " given.",
-				\Doctrine\ORM\Query::class,
-				QueryBuilder::class
-			));
+		foreach ($this->hints as $_name => $_value) {
+			$query->setHint($_name, $_value);
 		}
 
 		return $query;
 	}
-
 }
