@@ -15,7 +15,7 @@ class ResultSet implements \IteratorAggregate
 	private ?Traversable $results = null;
 	private $paginator;
 
-	public function __construct(QueryObject $qo, int $page = 1, ?int $itemsPerPage = null)
+	public function __construct(QueryObject $qo, int $page, int $itemsPerPage)
 	{
 		$this->qo = $qo;
 		$this->page = $page;
@@ -55,7 +55,12 @@ class ResultSet implements \IteratorAggregate
 		if ($this->results !== null) {
 			return $this->results;
 		}
-		
-		return $this->results = $this->qo->fetch();
+
+		return $this->results = new \ArrayIterator(
+			$this->qo->getQuery()
+				->setMaxResults($this->itemsPerPage)
+				->setFirstResult($this->itemsPerPage * ($this->page - 1))
+				->getResult()
+		);
 	}
 }

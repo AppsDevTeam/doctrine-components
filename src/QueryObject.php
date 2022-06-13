@@ -19,11 +19,6 @@ abstract class QueryObject
 	const JOIN_INNER = 'innerJoin';
 	const JOIN_LEFT = 'leftJoin';
 
-	private $selectPairsKey = null;
-	private $selectPairsValue = null;
-
-	protected $selectPrimary = false;
-
 	protected array $orByIdFilter = [];
 
 	protected ?array $byIdFilter = null;
@@ -41,7 +36,7 @@ abstract class QueryObject
 	protected array $postFetch = [];
 
 	protected ?string $entityClass = NULL;
-	
+
 	protected EntityManagerInterface $em;
 
 	public function getEntityManager(): EntityManagerInterface
@@ -204,10 +199,6 @@ abstract class QueryObject
 		return $this;
 	}
 
-	private function getJoinedEntityColumnName(string $column): string {
-		return implode('.', array_slice(explode('.', $column), -2));
-	}
-
 	/**
 	 * @param string $column
 	 * @param string $order
@@ -242,40 +233,10 @@ abstract class QueryObject
 		return $this;
 	}
 
-	/**
-	 * @param null $value Default to static::SELECT_PAIRS_VALUE or null, which returns the entire entity
-	 * @param null $key Default to static::SELECT_PAIRS_KEY or 'id'
-	 */
-	public function selectPairs($value = null, $key = null): self
-	{
-		$this->selectPairsKey = $key ?: static::SELECT_PAIRS_KEY;
-		$this->selectPairsValue = $value ?: static::SELECT_PAIRS_VALUE;
-
-		$this->disableSelects();
-
-		return $this;
-	}
 
 	public function callSelectPairsAuto(): bool
 	{
 		return !$this->selectPairsKey && !$this->selectPairsValue;
-	}
-
-	public function selectPrimary(string $singleValueAssociationField = null): self
-	{
-		$this->selectPrimary = true;
-
-		$this->disableSelects($disableDefaultOrder = true);
-		
-		$this->select[] = function (QueryBuilder $qb) use ($singleValueAssociationField) {
-			$qb->select($singleValueAssociationField ? 'IDENTITY(e.' . $singleValueAssociationField . ') id' : 'e.id');
-
-			if ($singleValueAssociationField) {
-				$qb->groupBy('e. ' . $singleValueAssociationField);
-			}
-		};
-
-		return $this;
 	}
 
 	/**
@@ -303,7 +264,7 @@ abstract class QueryObject
 		return $this;
 	}
 
-	public function getResultSet(int $page = 1, ?int $itemsPerPage = null): ResultSet
+	public function getResultSet(int $page, int $itemsPerPage): ResultSet
 	{
 		return new ResultSet($this, $page, $itemsPerPage);
 	}
@@ -317,7 +278,8 @@ abstract class QueryObject
 		$qb = $this->doCreateBasicQuery();
 
 		if ($qb->getDQLPart('groupBy')) {
-			throw new \Exception ('Count is not allowed to combine with groupBy statement.');
+			$paginator = new Doctrine\ORM\Tools\Pagination\Paginator($qb);
+			return $paginator->count();
 		}
 
 		$query = $this->getQuery($qb->select('COUNT(e.id)'));
@@ -325,15 +287,9 @@ abstract class QueryObject
 		return (int) $query->getSingleScalarResult();
 	}
 
-	public function fetch(?int $limit = null): \Traversable
+	public function fetch(?int $limit = null): array
 	{
-		$qb = $this->doCreateBasicQuery();
-
-		foreach ($this->select as $modifier) {
-			$modifier($qb);
-		}
-
-		$query = $this->getQuery($qb);
+		$query = $this->getQuery();
 
 		if ($limit) {
 			$query->setMaxResults($limit);
@@ -345,44 +301,36 @@ abstract class QueryObject
 	/**
 	 * @throws \Exception
 	 */
-	public function fetchPairs(?string $selectPairsValue, string $selectPairsKey = null): array
+	public function fetchPairs(?string $value, ?string $key): array
 	{
-		if ($this->select) {
-			throw new \Exception('You cannot call "fetchPairs()" when "select()" or "addSelect()" was used.');
-		}
-
 		$items = [];
 		foreach ($this->fetch() as $item) {
-			$key = $item->{'get' . ucfirst($selectPairsKey)}();
-			if (!is_scalar($key)) {
-				throw new \Exception('The key must not be of type `' . gettype($key) . '`.');
+			$_key = $item->{'get' . ucfirst($key)}();
+			if (!is_scalar($_key)) {
+				throw new \Exception('The key must not be of type `' . gettype($_key) . '`.');
 			}
 
-			$items[$key] = $selectPairsValue ? $item->{'get' . ucfirst($selectPairsValue)}() : $item;
+			$items[$_key] = $value ? $item->{'get' . ucfirst($value)}() : $item;
 		}
 
 		return $items;
 	}
 
-	public function fetchPrimary(string $singleValueAssociationField = null): array
+	public function fetchField(string $field): array
 	{
-		if ($this->select) {
-			throw new \Exception('You cannot call "fetchPrimary()" when "select()" or "addSelect()" was used.');
-		}
-
 		$qb = $this->doCreateBasicQuery();
 
-		$qb->select($singleValueAssociationField ? 'IDENTITY(e.' . $singleValueAssociationField . ') id' : 'e.id');
+		$qb->select('IDENTITY(e.' . $field . ') field');
 
-		if ($singleValueAssociationField) {
-			$qb->groupBy('e. ' . $singleValueAssociationField);
+		if ($field !== 'id') {
+			$qb->groupBy('e. ' . $field);
 		}
 
 		$query = $this->getQuery($qb);
 
 		$items = [];
 		foreach ($query->getResult(AbstractQuery::HYDRATE_SCALAR) as $item) {
-			$items[$item['id']] = $item['id'];
+			$items[$item['field']] = $item['field'];
 		}
 
 		return $items;
@@ -391,21 +339,25 @@ abstract class QueryObject
 	/**
 	 * @throws NoResultException
 	 */
-	public function fetchOne(): object
+	public function fetchOne(): object|array
 	{
-		$singleResult = iterator_to_array($this->fetch(1));
+		$result = $this->fetch();
 
-		if (!$singleResult) {
-			throw new NoResultException(); // simulate getSingleResult()
+		if (!$result) {
+			throw new NoResultException();
+		}
+
+		if (count($result) > 1) {
+			throw new Doctrine\ORM\NonUniqueResultException();
 		}
 
 		// TODO
 		// $this->postFetch(new \ArrayIterator($singleResult));
 
-		return array_shift($singleResult);
+		return $result[0];
 	}
 
-	public function fetchOneOrNull(): ?object
+	public function fetchOneOrNull(): object|array|null
 	{
 		try {
 			return $this->fetchOne();
@@ -413,7 +365,7 @@ abstract class QueryObject
 			return null;
 		}
 	}
-	
+
 	/**
 	 * @param EntityManagerInterface $em
 	 * @param IEntity[] $rootEntities Jeden typ entit, např. 10x User.
@@ -666,6 +618,10 @@ abstract class QueryObject
 		return $column;
 	}
 
+	private function getJoinedEntityColumnName(string $column): string {
+		return implode('.', array_slice(explode('.', $column), -2));
+	}
+
 	private function join(string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
 	{
 		return $this->innerJoin($join, $alias, $conditionType, $condition, $indexBy);
@@ -730,8 +686,15 @@ abstract class QueryObject
 		return $qb;
 	}
 
-	private function getQuery(QueryBuilder $qb): Doctrine\ORM\Query
+	public function getQuery(?QueryBuilder $qb = null): Doctrine\ORM\Query
 	{
+		if (! $qb) {
+			$qb = $this->doCreateBasicQuery();
+
+			foreach ($this->select as $modifier) {
+				$modifier($qb);
+			}
+		}
 		$query = $qb->getQuery();
 
 		foreach ($this->hints as $_name => $_value) {
