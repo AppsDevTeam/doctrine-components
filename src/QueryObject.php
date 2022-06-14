@@ -704,17 +704,6 @@ abstract class QueryObject
 		return $qb;
 	}
 
-	public function getQueryBuilder(): QueryBuilder
-	{
-		$qb = $this->doCreateBasicQuery();
-
-		foreach ($this->select as $modifier) {
-			$modifier($qb);
-		}
-
-		return $qb;
-	}
-
 	public function getQuery(?QueryBuilder $qb = null): Doctrine\ORM\Query
 	{
 		if (! $qb) {
