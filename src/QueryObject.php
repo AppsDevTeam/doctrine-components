@@ -44,9 +44,10 @@ abstract class QueryObject
 		return $this->em;
 	}
 
-	public function setEntityManager(EntityManagerInterface $em)
+	public function setEntityManager(EntityManagerInterface $em): static
 	{
 		$this->em = $em;
+		return $this;
 	}
 
 	/**
@@ -167,7 +168,7 @@ abstract class QueryObject
 	 * @param bool $strict
 	 * @return $this
 	 */
-	public function searchIn($column, $value, bool $strict = false, ?string $joinType = self::JOIN_INNER): self
+	public function searchIn($column, $value, bool $strict = false, ?string $joinType = self::JOIN_INNER): static
 	{
 		$this->addJoins((array)$column, $joinType);
 
@@ -204,7 +205,7 @@ abstract class QueryObject
 	 * @param string $order
 	 * @return self
 	 */
-	public function addOrderBy(string $column, string $order = 'ASC'): self
+	public function addOrderBy(string $column, string $order = 'ASC'): static
 	{
 		if (property_exists($this->getEntityClass(), $column)) {
 			$column = $this->addColumnPrefix($column);
@@ -221,7 +222,7 @@ abstract class QueryObject
 	 * @param string $order
 	 * @return self
 	 */
-	public function orderBy(string $column, string $order = 'ASC'): self
+	public function orderBy(string $column, string $order = 'ASC'): static
 	{
 		if (property_exists($this->getEntityClass(), $column)) {
 			$column = $this->addColumnPrefix($column);
@@ -258,9 +259,21 @@ abstract class QueryObject
 	 * @param string $fieldName Může být název pole (např. "contact") nebo cesta (např. "commission.contract.client").
 	 * @return $this
 	 */
-	public function addPostFetch(string $fieldName): self
+	public function addPostFetch(string $fieldName): static
 	{
 		$this->postFetch[] = $fieldName;
+		return $this;
+	}
+
+	public function by($filter): static
+	{
+		$this->filter[] = $filter;
+		return $this;
+	}
+
+	public function select($select): static
+	{
+		$this->select[] = $select;
 		return $this;
 	}
 
@@ -296,6 +309,11 @@ abstract class QueryObject
 		}
 
 		return $query->getResult();
+	}
+
+	public function fetchIterable(): iterable
+	{
+		return $this->getQuery()->toIterable();
 	}
 
 	/**
@@ -647,12 +665,12 @@ abstract class QueryObject
 		return $this;
 	}
 
-	private function getJoinFilterKey(string $joinType, string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null)
+	private function getJoinFilterKey(string $joinType, string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): string
 	{
 		return implode('_', [$joinType, $join, $alias, $conditionType, $condition, $indexBy]);
 	}
 
-	private function isAlreadyJoined(string $filterKey)
+	private function isAlreadyJoined(string $filterKey): bool
 	{
 		$filterKey = str_replace(self::JOIN_INNER, '', $filterKey);
 		$filterKey = str_replace(self::JOIN_LEFT, '', $filterKey);
@@ -681,6 +699,17 @@ abstract class QueryObject
 		if ($this->byIdFilter !== null) {
 			$qb->andWhere('e.id IN (:byIdFilter)')
 				->setParameter('byIdFilter', $this->byIdFilter);
+		}
+
+		return $qb;
+	}
+
+	public function getQueryBuilder(): QueryBuilder
+	{
+		$qb = $this->doCreateBasicQuery();
+
+		foreach ($this->select as $modifier) {
+			$modifier($qb);
 		}
 
 		return $qb;
