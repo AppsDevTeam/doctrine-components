@@ -18,7 +18,7 @@
 	},
 	"require": {
 		"php": ">=7.4",
-		"doctrine/orm": "^2.7",
+		"doctrine/orm": "^2.8",
 		"nette/utils": "^3.2"
 	},
 	"autoload": {
