@@ -8,12 +8,11 @@ use Doctrine\ORM\AbstractQuery;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\NoResultException;
 use Doctrine\ORM\QueryBuilder;
+use Exception;
+use Iterator;
 
 abstract class QueryObject
 {
-	const SELECT_PAIRS_KEY = 'id';
-	const SELECT_PAIRS_VALUE = null;
-
 	const ORDER_DEFAULT = 'order_default';
 
 	const JOIN_INNER = 'innerJoin';
@@ -35,32 +34,30 @@ abstract class QueryObject
 
 	protected array $postFetch = [];
 
-	protected ?string $entityClass = NULL;
+	protected ?string $entityClass = null;
 
-	protected EntityManagerInterface $em;
+	protected ?EntityManagerInterface $em = null;
 
-	public function getEntityManager(): EntityManagerInterface
+	abstract protected function getEntityClass(): string;
+
+	final public function getEntityManager(): ?EntityManagerInterface
 	{
 		return $this->em;
 	}
 
-	public function setEntityManager(EntityManagerInterface $em): static
+	final public function setEntityManager(EntityManagerInterface $em): static
 	{
 		$this->em = $em;
 		return $this;
 	}
 
-	/**
-	 * @return static
-	 */
-	public function disableDefaultOrder()
+	final public function disableDefaultOrder(): static
 	{
 		unset($this->select[static::ORDER_DEFAULT]);
-
 		return $this;
 	}
 
-	public function disableSelects($disableDefaultOrder = false)
+	final public function disableSelects(bool $disableDefaultOrder = false): static
 	{
 		foreach ($this->select as $key => $select) {
 			if ($key === static::ORDER_DEFAULT && !$disableDefaultOrder) {
@@ -77,7 +74,7 @@ abstract class QueryObject
 	 * @param int|int[]|IEntity|IEntity[]|[]|null $id
 	 * @return static
 	 */
-	public function byId($id)
+	final public function byId($id): static
 	{
 		if (is_iterable($id) && !is_string($id)) {
 			foreach ($id as $item) {
@@ -112,7 +109,7 @@ abstract class QueryObject
 	 * @param int|int[]|IEntity|IEntity[] $id
 	 * @return static
 	 */
-	public function orById($id)
+	final public function orById($id): static
 	{
 		if (is_iterable($id) && !is_string($id)) {
 			foreach ($id as $item) {
@@ -134,31 +131,6 @@ abstract class QueryObject
 		return $this;
 	}
 
-	protected function addJoins(array $columns, ?string $joinType)
-	{
-		if (!is_null($joinType)) {
-			foreach ($columns as $column) {
-				if (strstr($column, '.')) {
-					$aliases = explode('.', $column, -1);
-					if (count($aliases)) {
-						if ($aliases[0] == $this->entityAlias) {
-							unset($aliases[0]);
-						}
-						$aliasLast = null;
-						foreach ($aliases as $aliasNew) {
-							$join = $aliasLast ? $aliasLast . '.' . $aliasNew : $this->addColumnPrefix($aliasNew);
-							$filterKey = $this->getJoinFilterKey($joinType, $join, $aliasNew);
-							if (!$this->isAlreadyJoined($filterKey)) {
-								$this->commonJoin($joinType, $join, $aliasNew);
-							}
-							$aliasLast = $aliasNew;
-						}
-					}
-				}
-			}
-		}
-	}
-
 	/**
 	 * Obecná metoda na vyhledávání ve více sloupcích (spojení přes OR).
 	 * Podle vyhledávané hodnoty, případně parametru strict (LIKE vs. =), se zvolí typ vyhledávání (IN, LIKE, =).
@@ -168,7 +140,7 @@ abstract class QueryObject
 	 * @param bool $strict
 	 * @return $this
 	 */
-	public function searchIn($column, $value, bool $strict = false, ?string $joinType = self::JOIN_INNER): static
+	final public function searchIn($column, $value, bool $strict = false, ?string $joinType = self::JOIN_INNER): static
 	{
 		$this->addJoins((array)$column, $joinType);
 
@@ -200,12 +172,7 @@ abstract class QueryObject
 		return $this;
 	}
 
-	/**
-	 * @param string $column
-	 * @param string $order
-	 * @return self
-	 */
-	public function addOrderBy(string $column, string $order = 'ASC'): static
+	final public function addOrderBy(string $column, string $order = 'ASC'): static
 	{
 		if (property_exists($this->getEntityClass(), $column)) {
 			$column = $this->addColumnPrefix($column);
@@ -217,12 +184,7 @@ abstract class QueryObject
 		return $this;
 	}
 
-	/**
-	 * @param string $column
-	 * @param string $order
-	 * @return self
-	 */
-	public function orderBy(string $column, string $order = 'ASC'): static
+	final public function orderBy(string $column, string $order = 'ASC'): static
 	{
 		if (property_exists($this->getEntityClass(), $column)) {
 			$column = $this->addColumnPrefix($column);
@@ -234,17 +196,11 @@ abstract class QueryObject
 		return $this;
 	}
 
-
-	public function callSelectPairsAuto(): bool
-	{
-		return !$this->selectPairsKey && !$this->selectPairsValue;
-	}
-
 	/**
 	 * Spustí postFetch. Nevolat přímo.
 	 * @internal
 	 */
-	public function postFetch(\Iterator $iterator): void
+	final public function postFetch(Iterator $iterator): void
 	{
 		if (empty($this->postFetch)) {
 			return;
@@ -259,34 +215,18 @@ abstract class QueryObject
 	 * @param string $fieldName Může být název pole (např. "contact") nebo cesta (např. "commission.contract.client").
 	 * @return $this
 	 */
-	public function addPostFetch(string $fieldName): static
+	final public function addPostFetch(string $fieldName): static
 	{
 		$this->postFetch[] = $fieldName;
 		return $this;
 	}
 
-	public function by($filter): static
-	{
-		$this->filter[] = $filter;
-		return $this;
-	}
-
-	public function select($select): static
-	{
-		$this->select[] = $select;
-		return $this;
-	}
-
-	public function getResultSet(int $page, int $itemsPerPage): ResultSet
-	{
-		return new ResultSet($this, $page, $itemsPerPage);
-	}
-
 	/**
 	 * @throws Doctrine\ORM\NonUniqueResultException
 	 * @throws NoResultException
+	 * @throws Exception
 	 */
-	public function count(): int
+	final public function count(): int
 	{
 		$qb = $this->doCreateBasicQuery();
 
@@ -300,7 +240,10 @@ abstract class QueryObject
 		return (int) $query->getSingleScalarResult();
 	}
 
-	public function fetch(?int $limit = null): array
+	/**
+	 * @throws Exception
+	 */
+	final public function fetch(?int $limit = null): array
 	{
 		$query = $this->getQuery();
 
@@ -311,13 +254,18 @@ abstract class QueryObject
 		return $query->getResult();
 	}
 
-	public function fetchIterable(): iterable
+	final public function fetchIterable(): iterable
 	{
 		return $this->getQuery()->toIterable();
 	}
 
+	final public function getResultSet(int $page, int $itemsPerPage): ResultSet
+	{
+		return new ResultSet($this, $page, $itemsPerPage);
+	}
+
 	/**
-	 * @throws \Exception
+	 * @throws Exception
 	 */
 	public function fetchPairs(?string $value, ?string $key): array
 	{
@@ -325,7 +273,7 @@ abstract class QueryObject
 		foreach ($this->fetch() as $item) {
 			$_key = $item->{'get' . ucfirst($key)}();
 			if (!is_scalar($_key)) {
-				throw new \Exception('The key must not be of type `' . gettype($_key) . '`.');
+				throw new Exception('The key must not be of type `' . gettype($_key) . '`.');
 			}
 
 			$items[$_key] = $value ? $item->{'get' . ucfirst($value)}() : $item;
@@ -334,6 +282,9 @@ abstract class QueryObject
 		return $items;
 	}
 
+	/**
+	 * @throws Exception
+	 */
 	public function fetchField(string $field): array
 	{
 		$qb = $this->doCreateBasicQuery();
@@ -356,8 +307,10 @@ abstract class QueryObject
 
 	/**
 	 * @throws NoResultException
+	 * @throws Doctrine\ORM\NonUniqueResultException
+	 * @throws Exception
 	 */
-	public function fetchOne(): object|array
+	final public function fetchOne(): object|array
 	{
 		$result = $this->fetch();
 
@@ -375,13 +328,37 @@ abstract class QueryObject
 		return $result[0];
 	}
 
-	public function fetchOneOrNull(): object|array|null
+	/**
+	 * @throws Doctrine\ORM\NonUniqueResultException
+	 */
+	final public function fetchOneOrNull(): object|array|null
 	{
 		try {
 			return $this->fetchOne();
-		} catch (NoResultException $e) {
+		} catch (NoResultException) {
 			return null;
 		}
+	}
+
+	/**
+	 * @throws Exception
+	 */
+	final public function getQuery(?QueryBuilder $qb = null): Doctrine\ORM\Query
+	{
+		if (! $qb) {
+			$qb = $this->doCreateBasicQuery();
+
+			foreach ($this->select as $modifier) {
+				$modifier($qb);
+			}
+		}
+		$query = $qb->getQuery();
+
+		foreach ($this->hints as $_name => $_value) {
+			$query->setHint($_name, $_value);
+		}
+
+		return $query;
 	}
 
 	/**
@@ -615,22 +592,34 @@ abstract class QueryObject
 		}
 	}
 
-	protected function getEntityClass(): string
+	final protected function addJoins(array $columns, ?string $joinType): void
 	{
-		if ($this->entityClass) {
-			return $this->entityClass;
+		if (!is_null($joinType)) {
+			foreach ($columns as $column) {
+				if (strstr($column, '.')) {
+					$aliases = explode('.', $column, -1);
+					if (count($aliases)) {
+						if ($aliases[0] == $this->entityAlias) {
+							unset($aliases[0]);
+						}
+						$aliasLast = null;
+						foreach ($aliases as $aliasNew) {
+							$join = $aliasLast ? $aliasLast . '.' . $aliasNew : $this->addColumnPrefix($aliasNew);
+							$filterKey = $this->getJoinFilterKey($joinType, $join, $aliasNew);
+							if (!$this->isAlreadyJoined($filterKey)) {
+								$this->commonJoin($joinType, $join, $aliasNew);
+							}
+							$aliasLast = $aliasNew;
+						}
+					}
+				}
+			}
 		}
-
-		$fullClassQueryName = get_class($this);
-		$fullClassEntityName = str_replace("Queries", "Entity", $fullClassQueryName);
-		$fullClassEntityName = str_replace("Query", "", $fullClassEntityName);
-
-		return $fullClassEntityName;
 	}
 
-	protected function addColumnPrefix(?string $column = NULL): string
+	private function addColumnPrefix(?string $column = NULL): string
 	{
-		if ((strpos($column, '.') === FALSE) && (strpos($column, '\\') === FALSE)) {
+		if ((!str_contains($column, '.')) && (!str_contains($column, '\\'))) {
 			$column = $this->entityAlias . '.' . $column;
 		}
 		return $column;
@@ -680,8 +669,15 @@ abstract class QueryObject
 		return isset($this->filter[$filterKeyInner]) || isset($this->filter[$filterKeyLeft]);
 	}
 
+	/**
+	 * @throws Exception
+	 */
 	private function doCreateBasicQuery(): QueryBuilder
 	{
+		if (!$this->em) {
+			throw new Exception('Entity manager is not set! Use "setEntityManager()" first.');
+		}
+
 		$qb = $this->em->getRepository($this->getEntityClass())->createQueryBuilder('e');
 
 		// we need to use a reference to allow adding a filter inside another filter
@@ -702,23 +698,5 @@ abstract class QueryObject
 		}
 
 		return $qb;
-	}
-
-	public function getQuery(?QueryBuilder $qb = null): Doctrine\ORM\Query
-	{
-		if (! $qb) {
-			$qb = $this->doCreateBasicQuery();
-
-			foreach ($this->select as $modifier) {
-				$modifier($qb);
-			}
-		}
-		$query = $qb->getQuery();
-
-		foreach ($this->hints as $_name => $_value) {
-			$query->setHint($_name, $_value);
-		}
-
-		return $query;
 	}
 }

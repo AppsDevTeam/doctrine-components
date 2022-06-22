@@ -2,10 +2,13 @@
 
 namespace ADT\DoctrineComponents;
 
+use Doctrine\ORM\NonUniqueResultException;
+use Doctrine\ORM\NoResultException;
+use IteratorAggregate;
 use Nette\Utils\Paginator;
 use Traversable;
 
-class ResultSet implements \IteratorAggregate
+class ResultSet implements IteratorAggregate
 {
 	private QueryObject $qo;
 	private int $page;
@@ -13,7 +16,7 @@ class ResultSet implements \IteratorAggregate
 
 	private ?int $count = null;
 	private ?Traversable $results = null;
-	private $paginator;
+	private ?Paginator $paginator = null;
 
 	public function __construct(QueryObject $qo, int $page, int $itemsPerPage)
 	{
@@ -22,7 +25,7 @@ class ResultSet implements \IteratorAggregate
 		$this->itemsPerPage = $itemsPerPage;
 	}
 
-	public function getPaginator()
+	public function getPaginator(): Paginator
 	{
 		if ($this->paginator) {
 			return $this->paginator;
@@ -38,6 +41,10 @@ class ResultSet implements \IteratorAggregate
 		return $this->paginator = $paginator;
 	}
 
+	/**
+	 * @throws NonUniqueResultException
+	 * @throws NoResultException
+	 */
 	public function count(): int
 	{
 		if ($this->count !== null) {
