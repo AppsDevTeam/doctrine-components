@@ -289,16 +289,18 @@ abstract class QueryObject
 	{
 		$qb = $this->doCreateBasicQuery();
 
-		$qb->select('IDENTITY(e.' . $field . ') field');
-
-		if ($field !== 'id') {
-			$qb->groupBy('e. ' . $field);
+		$identifierFieldName = $this->em->getClassMetadata($this->getEntityClass())->getIdentifierFieldNames()[0];
+		if ($field === $identifierFieldName) {
+			$qb->select('e.' . $field . ' AS field');
+		} else {
+			$qb->select('IDENTITY(e.' . $field . ') AS field')
+				->groupBy('e.' . $field);
 		}
 
 		$query = $this->getQuery($qb);
 
 		$items = [];
-		foreach ($query->getResult(AbstractQuery::HYDRATE_SCALAR) as $item) {
+		foreach ($query->getResult() as $item) {
 			$items[$item['field']] = $item['field'];
 		}
 
