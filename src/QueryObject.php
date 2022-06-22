@@ -300,7 +300,7 @@ abstract class QueryObject
 		$query = $this->getQuery($qb);
 
 		$items = [];
-		foreach ($query->getResult() as $item) {
+		foreach ($query->getResult(AbstractQuery::HYDRATE_SCALAR) as $item) {
 			$items[$item['field']] = $item['field'];
 		}
 
