@@ -254,7 +254,7 @@ abstract class QueryObject
 		return $query->getResult();
 	}
 
-	final public function fetchIterable(): iterable
+	final public function fetchIterable(): \Generator
 	{
 		return $this->getQuery()->toIterable();
 	}
