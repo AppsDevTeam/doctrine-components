@@ -4,7 +4,7 @@
 	"description": "Doctrine components",
 	"keywords": ["appsdevteam", "doctrine"],
 	"homepage": "https://www.appsdevteam.com",
-	"license": ["BSD-3-Clause", "GPL-2.0", "GPL-3.0"],
+	"license": ["MIT"],
 	"authors": [
 		{
 			"name": "Apps Dev Team",
@@ -18,7 +18,7 @@
 	},
 	"require": {
 		"php": ">=8.0",
-		"doctrine/orm": "^2.11",
+		"doctrine/orm": "^2.8",
 		"nette/utils": "^3.2"
 	},
 	"autoload": {
