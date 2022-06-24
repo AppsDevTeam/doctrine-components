@@ -63,11 +63,15 @@ class ResultSet implements IteratorAggregate
 			return $this->results;
 		}
 
-		return $this->results = new \ArrayIterator(
+		$this->results = new \ArrayIterator(
 			$this->qo->getQuery()
 				->setMaxResults($this->itemsPerPage)
 				->setFirstResult($this->itemsPerPage * ($this->page - 1))
 				->getResult()
 		);
+
+		$this->qo->postFetch($this->results);
+
+		return $this->results;
 	}
 }

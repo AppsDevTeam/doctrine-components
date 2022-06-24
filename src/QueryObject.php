@@ -241,6 +241,7 @@ abstract class QueryObject
 	}
 
 	/**
+	 * @return array
 	 * @throws Exception
 	 */
 	final public function fetch(?int $limit = null): array
@@ -251,7 +252,11 @@ abstract class QueryObject
 			$query->setMaxResults($limit);
 		}
 
-		return $query->getResult();
+		$result = $query->getResult();
+
+		$this->postFetch(new \ArrayIterator($result));
+
+		return $result;
 	}
 
 	final public function fetchIterable(): \Generator
@@ -324,8 +329,7 @@ abstract class QueryObject
 			throw new Doctrine\ORM\NonUniqueResultException();
 		}
 
-		// TODO
-		// $this->postFetch(new \ArrayIterator($singleResult));
+		 $this->postFetch(new \ArrayIterator($result));
 
 		return $result[0];
 	}
@@ -421,7 +425,7 @@ abstract class QueryObject
 		$availableFieldNames = array_keys($rootEntityAssociations);
 		foreach ($fieldNames as $fieldName) {
 			if (!in_array($fieldName, $availableFieldNames)) {
-				sprintf('PostFetch: Entita %s nemá pole %s.', get_class($firstRootEntity), $fieldName);
+				throw new Exception("PostFetch: Entita '". get_class($firstRootEntity) ."' nemá pole '$fieldName'.");
 			}
 		}
 		$fieldNames = array_intersect($availableFieldNames, $fieldNames);
@@ -429,7 +433,8 @@ abstract class QueryObject
 		// připravíme QueryBuilder pro vytažení IDček *_TO_ONE asociací, např. z Userů
 		$qb = $em->getRepository(get_class($firstRootEntity))->createQueryBuilder('e')
 			->select('PARTIAL e.{id} AS e_id')
-			->andWhere('e.id IN (:ids)', $rootIds);
+			->andWhere('e.id IN (:ids)')
+			->setParameter('ids', $rootIds);
 
 		// budeme si je počítat, abychom nedělali prázdný dotaz
 		$toOneAssociations = 0;
@@ -463,8 +468,7 @@ abstract class QueryObject
 			$propertyName = $association['mappedBy'] ?: $association['inversedBy'];
 
 			if ($propertyName === NULL) {
-				bd('PostFetch: Nelze přiřadit entity k root entitě. Chybí mappedBy nebo inversedBy. ' . sprintf('(rootEntity=%s; targetEntity=%s)', $association['sourceEntity'], $association['targetEntity']));
-				continue;
+				throw new Exception("PostFetch rootEntity='{$association['sourceEntity']}', targetEntity='{$association['targetEntity']}': Nelze přiřadit entity k root entitě. Chybí mappedBy nebo inversedBy.");
 			}
 
 			// pro každou asociaci (např. 'address') si připravíme QueryBuilder
@@ -492,17 +496,20 @@ abstract class QueryObject
 
 				// a přidáme podmínku
 				$qb
-					->orWhere('e.id IN (:ids)', array_unique($ids));
+					->orWhere('e.id IN (:ids)')
+					->setParameter('ids', array_unique($ids));
 			} elseif ($association['type'] === \Doctrine\ORM\Mapping\ClassMetadata::ONE_TO_MANY) {
 				// u ONE_TO_MANY asociací stačí selectovat podle IDček rootovských entit
 				// např. jeden User má více adres, v adrese je nastaven User
 				$qb
-					->orWhere('e.' . $association['mappedBy'] . ' IN (:ids)', array_unique($rootIds));
+					->orWhere('e.' . $association['mappedBy'] . ' IN (:ids)')
+					->setParameter('ids', array_unique($rootIds));
 			} elseif ($association['type'] === \Doctrine\ORM\Mapping\ClassMetadata::MANY_TO_MANY) {
 				// u MANY_TO_MANY asociací musíme (např. adresu) joinovat s root entitou (User) a pak selectovat podle IDček rootovských entit
 				$qb
 					->leftJoin('e.' . $propertyName, $propertyName)
-					->orWhere($propertyName . '.id IN (:ids)', array_unique($rootIds));
+					->orWhere($propertyName . '.id IN (:ids)')
+					->setParameter('ids', array_unique($rootIds));
 			} else {
 				continue;
 			}
@@ -515,11 +522,11 @@ abstract class QueryObject
 			if ($association['type'] & \Doctrine\ORM\Mapping\ClassMetadata::TO_ONE) {
 				// Doctrina nám entity přiřadí
 			} elseif ($association['type'] & \Doctrine\ORM\Mapping\ClassMetadata::TO_MANY) {
-				$refCollProperty = new \Nette\Reflection\Property(get_class($firstRootEntity), $association['fieldName']);
-				$refCollProperty->accessible = TRUE;
+				$refCollProperty = new \ReflectionProperty(get_class($firstRootEntity), $association['fieldName']);
+				$refCollProperty->setAccessible(true);
 
-				$refInitProperty = new \Nette\Reflection\Property(\Doctrine\ORM\PersistentCollection::class, 'initialized');
-				$refInitProperty->accessible = TRUE;
+				$refInitProperty = new \ReflectionProperty(\Doctrine\ORM\PersistentCollection::class, 'initialized');
+				$refInitProperty->setAccessible(true);
 
 				if ($association['type'] === \Doctrine\ORM\Mapping\ClassMetadata::MANY_TO_MANY) {
 					// u MANY_TO_MANY relací se nám ztratila informace o tom, která entita patří do jaké kolekce,
@@ -529,7 +536,8 @@ abstract class QueryObject
 						->from($association['targetEntity'], 'e')
 						->select('e.id AS childEntityId, ' . $propertyName . '.id AS rootEntityId')
 						->leftJoin('e.' . $propertyName, $propertyName)
-						->andWhere($propertyName . '.id IN (:ids)', array_unique($rootIds))
+						->andWhere($propertyName . '.id IN (:ids)')
+						->setParameter('ids', array_unique($rootIds))
 						->getQuery()
 						->getArrayResult();
 				}
