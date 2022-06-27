@@ -2,14 +2,22 @@
 
 namespace ADT\DoctrineComponents;
 
+use ArrayIterator;
 use Closure;
 use Doctrine;
 use Doctrine\ORM\AbstractQuery;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\NoResultException;
+use Doctrine\ORM\PersistentCollection;
 use Doctrine\ORM\QueryBuilder;
 use Exception;
+use Generator;
 use Iterator;
+use Nette\Utils\Arrays;
+use Nette\Utils\Strings;
+use ReflectionClass;
+use ReflectionException;
+use ReflectionProperty;
 
 abstract class QueryObject
 {
@@ -138,9 +146,10 @@ abstract class QueryObject
 	 * @param string|string[] $column
 	 * @param mixed $value
 	 * @param bool $strict
+	 * @param string|null $joinType
 	 * @return $this
 	 */
-	final public function searchIn($column, $value, bool $strict = false, ?string $joinType = self::JOIN_INNER): static
+	final public function searchIn(array|string $column, mixed $value, bool $strict = false, ?string $joinType = self::JOIN_INNER): static
 	{
 		$this->addJoins((array)$column, $joinType);
 
@@ -198,6 +207,7 @@ abstract class QueryObject
 
 	/**
 	 * Spustí postFetch. Nevolat přímo.
+	 * @throws ReflectionException
 	 * @internal
 	 */
 	final public function postFetch(Iterator $iterator): void
@@ -241,7 +251,6 @@ abstract class QueryObject
 	}
 
 	/**
-	 * @return array
 	 * @throws Exception
 	 */
 	final public function fetch(?int $limit = null): array
@@ -254,12 +263,15 @@ abstract class QueryObject
 
 		$result = $query->getResult();
 
-		$this->postFetch(new \ArrayIterator($result));
+		$this->postFetch(new ArrayIterator($result));
 
 		return $result;
 	}
 
-	final public function fetchIterable(): \Generator
+	/**
+	 * @throws Exception
+	 */
+	final public function fetchIterable(): Generator
 	{
 		return $this->getQuery()->toIterable();
 	}
@@ -319,31 +331,42 @@ abstract class QueryObject
 	 */
 	final public function fetchOne(): object|array
 	{
-		$result = $this->fetch();
+		return $this->fetchSingleResult();
+	}
+
+	/**
+	 * @throws Doctrine\ORM\NonUniqueResultException|ReflectionException
+	 */
+	final public function fetchOneOrNull(bool $strict = true): object|array|null
+	{
+		try {
+			return $this->fetchSingleResult($strict);
+		} catch (NoResultException) {
+			return null;
+		}
+	}
+
+	/**
+	 * @throws ReflectionException
+	 * @throws Doctrine\ORM\NonUniqueResultException
+	 * @throws NoResultException
+	 * @throws Exception
+	 */
+	private function fetchSingleResult(bool $strict = true): object|array|null
+	{
+		$result = $this->fetch(2);
 
 		if (!$result) {
 			throw new NoResultException();
 		}
 
-		if (count($result) > 1) {
+		if ($strict && count($result) > 1) {
 			throw new Doctrine\ORM\NonUniqueResultException();
 		}
 
-		 $this->postFetch(new \ArrayIterator($result));
+		$this->postFetch(new ArrayIterator($result));
 
 		return $result[0];
-	}
-
-	/**
-	 * @throws Doctrine\ORM\NonUniqueResultException
-	 */
-	final public function fetchOneOrNull(): object|array|null
-	{
-		try {
-			return $this->fetchOne();
-		} catch (NoResultException) {
-			return null;
-		}
 	}
 
 	/**
@@ -371,6 +394,8 @@ abstract class QueryObject
 	 * @param EntityManagerInterface $em
 	 * @param IEntity[] $rootEntities Jeden typ entit, např. 10x User.
 	 * @param string[] $fieldNames Názvy relací v hlavní entitě. Pro zanoření použij '.'. Např. [ 'address' ].
+	 * @throws ReflectionException
+	 * @throws Exception
 	 */
 	public static function doPostFetch(EntityManagerInterface $em, array $rootEntities, array $fieldNames): void
 	{
@@ -382,7 +407,7 @@ abstract class QueryObject
 		$childrenFieldNames = []; // fieldName => childrenFieldNames
 
 		foreach ($fieldNames as $fieldName) {
-			if (!\Nette\Utils\Strings::contains($fieldName, '.')) {
+			if (!Strings::contains($fieldName, '.')) {
 				// fetch jen pro toto pole
 				$currentFieldNames[] = $fieldName;
 			} else {
@@ -403,7 +428,7 @@ abstract class QueryObject
 
 		if (!is_object($firstRootEntity) && isset($firstRootEntity[0]) && is_object($firstRootEntity[0])) {
 			// entita je schovaná v ArrayResultu
-			$rootEntities = \Nette\Utils\Arrays::associate($rootEntities, '[]=0');
+			$rootEntities = Arrays::associate($rootEntities, '[]=0');
 			$firstRootEntity = $rootEntities[0];
 		}
 
@@ -443,7 +468,7 @@ abstract class QueryObject
 			// $fieldName je např. 'address'
 			$association = $rootEntityAssociations[$fieldName];
 
-			if ($association['type'] & \Doctrine\ORM\Mapping\ClassMetadata::TO_ONE) {
+			if ($association['type'] & Doctrine\ORM\Mapping\ClassMetadataInfo::TO_ONE) {
 				// pokud je asociace *_TO_ONE, tak přidáme select na její ID a zajistíme provedení dotazu
 
 				$qb->addSelect('IDENTITY(e.' . $fieldName . ') AS id_' . $i);
@@ -476,7 +501,7 @@ abstract class QueryObject
 				->select('e')
 				->from($association['targetEntity'], 'e');
 
-			if ($association['type'] & \Doctrine\ORM\Mapping\ClassMetadata::TO_ONE) {
+			if ($association['type'] & Doctrine\ORM\Mapping\ClassMetadataInfo::TO_ONE) {
 				// pokud se jedná a TO_ONE asociaci, posbíráme IDčka připojených entit
 				// např. u Usera je jen jedna adresa
 
@@ -498,13 +523,13 @@ abstract class QueryObject
 				$qb
 					->orWhere('e.id IN (:ids)')
 					->setParameter('ids', array_unique($ids));
-			} elseif ($association['type'] === \Doctrine\ORM\Mapping\ClassMetadata::ONE_TO_MANY) {
+			} elseif ($association['type'] === Doctrine\ORM\Mapping\ClassMetadataInfo::ONE_TO_MANY) {
 				// u ONE_TO_MANY asociací stačí selectovat podle IDček rootovských entit
 				// např. jeden User má více adres, v adrese je nastaven User
 				$qb
 					->orWhere('e.' . $association['mappedBy'] . ' IN (:ids)')
 					->setParameter('ids', array_unique($rootIds));
-			} elseif ($association['type'] === \Doctrine\ORM\Mapping\ClassMetadata::MANY_TO_MANY) {
+			} elseif ($association['type'] === Doctrine\ORM\Mapping\ClassMetadataInfo::MANY_TO_MANY) {
 				// u MANY_TO_MANY asociací musíme (např. adresu) joinovat s root entitou (User) a pak selectovat podle IDček rootovských entit
 				$qb
 					->leftJoin('e.' . $propertyName, $propertyName)
@@ -519,16 +544,16 @@ abstract class QueryObject
 				->getQuery()
 				->getResult();
 
-			if ($association['type'] & \Doctrine\ORM\Mapping\ClassMetadata::TO_ONE) {
+			if ($association['type'] & Doctrine\ORM\Mapping\ClassMetadataInfo::TO_ONE) {
 				// Doctrina nám entity přiřadí
-			} elseif ($association['type'] & \Doctrine\ORM\Mapping\ClassMetadata::TO_MANY) {
-				$refCollProperty = new \ReflectionProperty(get_class($firstRootEntity), $association['fieldName']);
+			} elseif ($association['type'] & Doctrine\ORM\Mapping\ClassMetadataInfo::TO_MANY) {
+				$refCollProperty = new ReflectionProperty(get_class($firstRootEntity), $association['fieldName']);
 				$refCollProperty->setAccessible(true);
 
-				$refInitProperty = new \ReflectionProperty(\Doctrine\ORM\PersistentCollection::class, 'initialized');
+				$refInitProperty = new ReflectionProperty(PersistentCollection::class, 'initialized');
 				$refInitProperty->setAccessible(true);
 
-				if ($association['type'] === \Doctrine\ORM\Mapping\ClassMetadata::MANY_TO_MANY) {
+				if ($association['type'] === Doctrine\ORM\Mapping\ClassMetadataInfo::MANY_TO_MANY) {
 					// u MANY_TO_MANY relací se nám ztratila informace o tom, která entita patří do jaké kolekce,
 					// dalším dotazem tedy zjistíme co kam máme dát
 
@@ -546,8 +571,8 @@ abstract class QueryObject
 				foreach ($result as $row) {
 					$collections = [];
 
-					if ($association['type'] !== \Doctrine\ORM\Mapping\ClassMetadata::MANY_TO_MANY) {
-						$reflector = new \ReflectionClass($row);
+					if ($association['type'] !== Doctrine\ORM\Mapping\ClassMetadataInfo::MANY_TO_MANY) {
+						$reflector = new ReflectionClass($row);
 						$property = $reflector->getProperty($propertyName);
 						$property->setAccessible(true);
 						$rootEntity = $property->getValue($row);
@@ -568,7 +593,7 @@ abstract class QueryObject
 					}
 
 					foreach ($collections as $collection) {
-						if ($collection instanceof \Doctrine\ORM\PersistentCollection) {
+						if ($collection instanceof PersistentCollection) {
 							if ($refInitProperty->getValue($collection)) {
 								// kolekce už je inicializovaná
 								continue;
@@ -583,7 +608,7 @@ abstract class QueryObject
 				// selectovat data, která už tam jsou
 				foreach ($rootEntities as $rootEntity) {
 					$collection = $refCollProperty->getValue($rootEntity);
-					if ($collection instanceof \Doctrine\ORM\PersistentCollection) {
+					if ($collection instanceof PersistentCollection) {
 						if ($refInitProperty->getValue($collection)) {
 							// kolekce už je inicializovaná
 							continue;
@@ -606,7 +631,7 @@ abstract class QueryObject
 	{
 		if (!is_null($joinType)) {
 			foreach ($columns as $column) {
-				if (strstr($column, '.')) {
+				if (str_contains($column, '.')) {
 					$aliases = explode('.', $column, -1);
 					if (count($aliases)) {
 						if ($aliases[0] == $this->entityAlias) {
