@@ -329,30 +329,7 @@ abstract class QueryObject
 	 * @throws Doctrine\ORM\NonUniqueResultException
 	 * @throws Exception
 	 */
-	final public function fetchOne(): object|array
-	{
-		return $this->fetchSingleResult();
-	}
-
-	/**
-	 * @throws Doctrine\ORM\NonUniqueResultException|ReflectionException
-	 */
-	final public function fetchOneOrNull(bool $strict = true): object|array|null
-	{
-		try {
-			return $this->fetchSingleResult($strict);
-		} catch (NoResultException) {
-			return null;
-		}
-	}
-
-	/**
-	 * @throws ReflectionException
-	 * @throws Doctrine\ORM\NonUniqueResultException
-	 * @throws NoResultException
-	 * @throws Exception
-	 */
-	private function fetchSingleResult(bool $strict = true): object|array|null
+	final public function fetchOne(bool $strict = true): object|array
 	{
 		$result = $this->fetch(2);
 
@@ -367,6 +344,18 @@ abstract class QueryObject
 		$this->postFetch(new ArrayIterator($result));
 
 		return $result[0];
+	}
+
+	/**
+	 * @throws Doctrine\ORM\NonUniqueResultException|ReflectionException
+	 */
+	final public function fetchOneOrNull(bool $strict = true): object|array|null
+	{
+		try {
+			return $this->fetchOne($strict);
+		} catch (NoResultException) {
+			return null;
+		}
 	}
 
 	/**
