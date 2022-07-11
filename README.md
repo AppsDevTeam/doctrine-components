@@ -63,6 +63,7 @@ class ProfileQueryObject extends QueryObject implements FetchInterface
 	public function setSecurityUser(SecurityUser $securityUser): static
 	{
 	    $this->securityUser = $securityUser;
+
 	    return $this;
 	}
 }
