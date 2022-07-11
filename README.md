@@ -83,25 +83,23 @@ The init method is used to specify default filters and order. You have to always
 
 ### Method `by`
 
-Method `by` is a shortcut for creating `filter` callbacks.
+Method `by` is a shortcut for creating `filter` callbacks. It offers some useful features:
 
-When there are more columns, `orWhere` is used among them.
+- When there are more columns, `orWhere` is used among them.
 
-If a `$value` is type of 'string' `LIKE %$value%` is used. You can change it by `filterType: FilterTypeEnum::STRICT`.
+- If a `$value` is type of 'string', `LIKE %$value%` is used. You can change it by parameter `filterType` with value `FilterTypeEnum::STRICT`.
 
-If you would like get all value in certain range, you can use `filterType: FilterTypeEnum::RANGE`.
+- If you would like get all value in certain range, you can use parameter `filterType` with value `FilterTypeEnum::RANGE`.
 
-You can use dot notation to auto join other entities.
+- You can use dot notation to auto join other entities.
 
 ### Method `orderBy`
 
 Method `orderBy` creates a callback which will be applied on `QueryBuilder` when created.
 
-Unlike the `filter` callbacks, only one `order` callback can be specified.
+You can use a column name as first parameter and ASC/DESC as a second parameter instead of an array, if you need to sort only by one column.
 
-You can use also use column name as first parameter and ASC/DESC as second instead of array.
-
-You can use dot notation to auto join other entities.
+You can also use dot notation to auto join other entities.
 
 ## Basic usage
 
