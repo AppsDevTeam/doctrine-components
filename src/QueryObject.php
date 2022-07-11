@@ -3,6 +3,7 @@
 namespace ADT\DoctrineComponents;
 
 use App\Model\Queries\EventQuery;
+use App\Model\Queries\UserAgreementQuery;
 use ArrayIterator;
 use Closure;
 use Doctrine;
@@ -149,6 +150,13 @@ abstract class QueryObject implements FetchInterface
 
 		return $this;
 	}
+	
+	final public function disableFilter(array|string $filter)
+	{
+		foreach ((array) $filter as $_filter) {
+			unset($this->filter[$filter]);
+		}
+	}
 
 	/**
 	 * Obecná metoda na vyhledávání ve více sloupcích (spojení přes OR).
@@ -160,21 +168,21 @@ abstract class QueryObject implements FetchInterface
 	 * @param string|null $joinType
 	 * @return $this
 	 */
-	final public function searchIn(array|string $column, mixed $value, bool $strict = false, ?string $joinType = self::JOIN_INNER): static
+	final public function by(array|string $column, mixed $value, bool $strict = false, ?string $joinType = self::JOIN_INNER): static
 	{
 		$this->addJoins((array)$column, $joinType);
 
 		$this->filter[] = function (QueryBuilder $qb) use ($column, $value, $strict) {
 			$x = array_map(
 				function($_column) use ($qb, $value, $strict) {
-					$paramName = 'searchIn_' . str_replace('.', '_', $_column);
+					$paramName = 'by_' . str_replace('.', '_', $_column);
 					$_column = $this->addColumnPrefix($_column);
 					$_column = $this->getJoinedEntityColumnName($_column);
 
 					if (is_array($value)) {
 						$condition = "$_column IN (:$paramName)";
 						$qb->setParameter($paramName, $value);
-					} else if (is_scalar($value) && !$strict) {
+					} else if (is_string($value) && !$strict) {
 						$condition = "$_column LIKE :$paramName";
 						$qb->setParameter($paramName, "%$value%");
 					} else if (is_null($value)) {
@@ -217,6 +225,10 @@ abstract class QueryObject implements FetchInterface
 
 		return $this;
 	}
+
+	/***************************
+	 * QUERY BUILDER AND QUERY *
+	 ***************************/
 
 	final public function getQuery(QueryBuilder $qb): Doctrine\ORM\Query
 	{
@@ -280,7 +292,7 @@ abstract class QueryObject implements FetchInterface
 	 * JOINS *
 	 *********/
 
-	final protected function addJoins(array $columns, ?string $joinType): void
+	private function addJoins(array $columns, ?string $joinType): void
 	{
 		if (!is_null($joinType)) {
 			foreach ($columns as $column) {
@@ -303,11 +315,6 @@ abstract class QueryObject implements FetchInterface
 				}
 			}
 		}
-	}
-
-	final protected function join(QueryBuilder $qb, string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
-	{
-		return $this->innerJoin($qb, $join, $alias, $conditionType, $condition, $indexBy);
 	}
 
 	final protected function leftJoin(QueryBuilder $qb, string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
@@ -369,7 +376,7 @@ abstract class QueryObject implements FetchInterface
 		$qb = $this->createQueryBuilder();
 
 		if ($this->hasModifiedColumns($qb)) {
-			throw new \Exception('Cannot call fetch on a query object with modified columns.');
+			throw new \Exception('Cannot call ' . __METHOD__ . ' on a query object with modified columns.');
 		}
 
 		$query = $this->getQuery($qb);
@@ -394,7 +401,7 @@ abstract class QueryObject implements FetchInterface
 		$qb = $this->createQueryBuilder();
 
 		if ($this->hasModifiedColumns($qb)) {
-			throw new \Exception('Cannot call fetchIterable on a query object with modified columns.');
+			throw new \Exception('Cannot call ' . __METHOD__ . ' on a query object with modified columns.');
 		}
 
 		return $this->getQuery($qb)->toIterable();
@@ -509,19 +516,15 @@ abstract class QueryObject implements FetchInterface
 	}
 
 
-	// TODO osetrit hidden sloupce
 	private function hasModifiedColumns(QueryBuilder $qb): bool
 	{
-		$selectDQLParts = $qb->getDQLPart('select');
-		if (count($selectDQLParts) !== 1) {
-			return true;
-		}
-		/** @var Doctrine\ORM\Query\Expr\Select $selectDQL */
-		elseif (($selectDQL = $selectDQLParts[0]) && count($selectDQL->getParts()) !== 1) {
-			return true;
-		}
-		elseif ($selectDQL->getParts()[0] !== $this->entityAlias) {
-			return true;
+		/** @var Doctrine\ORM\Query\Expr\Select $_selectDQL */
+		foreach ($qb->getDQLPart('select') as $_selectDQL) {
+			foreach ($_selectDQL->getParts() as $_select) {
+				if ($_select !== $this->entityAlias && !str_contains($_select, 'AS HIDDEN')) {
+					return true;
+				}
+			}
 		}
 
 		return false;

@@ -1,4 +1,4 @@
-# Doctrine Components
+# Query Object
 
 ## Install
 
@@ -6,70 +6,57 @@
 composer require adt/doctrine-components
 ```
 
-## Creating a query object
+## Creating a QueryObject class
 
 ```php
 /**
- * @extends QueryObject<Banner>
- * @implements FetchInterface<Banner>
+ * Annotations "extends" and "implements" and interface "FetchInterface" are used for PhpStorm code completion and PHPStan.
+ * 
+ * @extends QueryObject<Profile>
+ * @implements FetchInterface<Profile>
  */
-class UserQueryObject extends QueryObject implements FetchInterface
+class ProfileQueryObject extends QueryObject implements FetchInterface
 {
-    use FetchTrait;
-
 	const FILTER_SECURITY = 'filter_security';
+	const FILTER_IS_ACTIVE = 'filter_is_active';
 
 	private SecurityUser $securityUser;
 
 	protected function getEntityClass(): string
 	{
-		return User::class;
+		return Profile::class;
 	}
 
 	protected function init(): void
 	{
 		parent::init();
-
-		$this->filter[] = function (QueryBuilder $qb) {
-			$this->joinIdentity($qb);
-
-			$qb->andWhere('identity.isActive = 1');
-		};
 		
 		$this->filter[self::FILTER_SECURITY] = function (QueryBuilder $qb) {
 			if (!$this->securityUser->isAdmin()) {
-			    $qb->andWhere('e.id = :securityFilterId')
+			    $qb->andWhere('e.id = :init_id')
 			        ->setParameter('id', $this->securityUser->getId())
 			}
-			$qb->andWhere('identity.isActive = 1');
-		};
-
-		$this->order = function (QueryBuilder $qb) {
-		    $this->joinIdentity($qb);
-		
-		    $qb->andOrder('identity.lastName', 'ASC');
-		}
-	}
-    
-	public function joinIdentity(QueryBuilder $qb)
-	{
-		$this->innerJoin($qb, 'e.identity', 'identity');
-	}
-	
-	public function disableSecurityFilter()
-	{
-		unset($this->filter[self::FILTER_SECURITY]);
-	}
-	
-	public function byLastName(string $lastName): static
-	{
-		$this->filter[] = function (QueryBuilder $qb) {
-			$this->joinIdentity($qb);
-
-			$qb->andWhere('identity.lastName = :lastName')
-				->setParameter('lastName', $lastName);
 		};
 		
+		$this->byIsActive(true);
+		
+		$this->orderBy(['identity.lastName' => 'ASC', 'identity.firstName' => 'ASC']);
+	}
+	
+	public function byIsActive(bool $isActive): static
+	{
+		$this->filter[self::FILTER_IS_ACTIVE] = function(QueryBuilder $qb) use ($isActive) {
+			$qb->andWhere('e.isActive = :isActive')
+				->setParameter('isActive', $isActive);
+		};
+		
+		return $this;
+	}
+	
+	public function search(string $value)
+	{
+	    $this->by(['identity.firstName', 'identity.lastName', 'identity.email', 'identity.phone'], $value);
+
 		return $this;
 	}
 	
@@ -87,111 +74,178 @@ The `getEntityClass` method must be specified and return your entity class.
 
 ### Method `init`
 
-The init method is used to specify default filters and sorting. You have to always call `parent::init()` when you use it.
+The init method is used to specify default filters and order. You have to always call `parent::init()` when you use it.
 
-### Callbacks `filter` and `order`
+### Callback array `filter`
 
-`filter` is array of callbacks which will be applied when QueryBuilder is created.
+`filter` is array of callbacks which will be applied on `QueryBuilder` when created.
 
-Unlike the filter callbacks, only one `order` callback can be specified.
+### Method `by`
+
+Method `by` is a shortcut for creating `filter` callbacks.
+
+When there are more columns, `orWhere` is used among them.
+
+If a `$value` is type of 'string' `LIKE %$value%` is used. You can change it by `filterType: FilterTypeEnum::STRICT`.
+
+If you would like get all value in certain range, you can use `filterType: FilterTypeEnum::RANGE`.
+
+You can use dot notation to auto join other entities.
+
+### Method `orderBy`
+
+Method `orderBy` creates a callback which will be applied on `QueryBuilder` when created.
+
+Unlike the `filter` callbacks, only one `order` callback can be specified.
+
+You can use also use column name as first parameter and ASC/DESC as second instead of array.
+
+You can use dot notation to auto join other entities.
 
 ## Basic usage
 
+### Creating an instance
+
 ```php
-$users = (new UserQueryObject($entityManager))
-	->setSecurityUser($securityUser)
-	->byLastName('Doe')
-	->fetch();
+$queryObject = (new ProfileQueryObject($entityManager))->setSecurityUser($securityUser);
 ```
 
 or better with the use of a factory:
 
 ```php
 // example of Nette framework factory
-interface UserQueryObjectFactory
+interface ProfileQueryObjectFactory
 {
-	/** @return FetchInterface<User> */
-	public function create(): UserQueryObject;
+	/** 
+	 * Annotation is used for PhpStorm code completion.
+	 * 
+	 * @return FetchInterface<Profile> 
+	 */
+	public function create(): ProfileQueryObject;
 }
 ````
 
+together with neon:
+
+```yaml
+decorator:
+	ADT\DoctrineObjects\QueryObject:
+		setup:
+			- setEntityManager(@App\Model\Doctrine\EntityManager)
+			- setSecurityUser(@security.user)
+```
+
+### Fetch results
+
 ```php
-// returns all users with last name Doe
-$users = $this->userQueryObjectFactory->create()->byLastName('Doe')->fetch();
+// returns all active profiles
+$profiles = $this->profileQueryObjectFactory->create()->fetch();
+
+// returns all active profiles with name, email or phone containing "Doe"
+$profiles = $this->profileQueryObjectFactory->create()->search('Doe')->fetch();
+
+// returns all disabled profiles
+$profiles = $this->profileQueryObjectFactory->create()->byIsActive(false)->fetch();
+
+// returns first 10 profiles
+$profiles = $this->profileQueryObjectFactory->create()->fetch(limit: 10);
 ```
 
 ```php
-// returns number of users with last name Doe
-$numberOfUsers = $this->userQueryObjectFactory->create()->byLastName('Doe')->count();
+// returns an active profile by ID or throws your own error when a profile does not exist
+if (!$profile = $this->profileQueryObjectFactory->create()->byId($id)->fetchOneOrNull()) {
+    return new \Exception('Profile not found.');
+}
+
+// returns first active profile with name, name, email or phone containing "Doe", "strict: false" has to be specified,
+// otherwise NonUniqueResultException may be thrown
+$profile = $this->profileQueryObjectFactory->create()->search('Doe')->fetchOneOrNull(strict: false);
 ```
 
 ```php
-// returns first 10 users with last name Doe
-$users = $this->userQueryObjectFactory->create()->byLastName('Doe')->fetch(limit: 10);
+// returns an active profile by ID or throws NoResultException when profile does not exist
+$profile = $this->profileQueryObjectFactory->create()->byId(self::ADMIN_PROFILE_ID)->fetchOne();
 ```
+
+```php
+// returns an active profile as an array of {Profile::getId(): Profile::getName()}
+$profiles = $this->profileQueryObjectFactory->create()->fetchPairs('name', 'id');
+```
+
+```php
+// returns array of profile ids
+$profileIds = $this->profileQueryObjectFactory->create()->fetchField('id');
+```
+
+### Count results
+
+```php
+// returns number of all active profiles
+$numberOfProfiles = $this->profileQueryObjectFactory->create()->count();
+```
+
+### Disable default filters
+
+```php
+// returns both active and disabled profiles
+$profiles = $this->profileQueryObjectFactory->create()->disableFilter(ProfileQueryObject::FILTER_IS_ACTIVE)->fetch();
+
+// returns all profiles without applying a default security filter, for example in console
+$profiles = $this->profileQueryObjectFactory->create()->disableFilter(ProfileQueryObject::FILTER_SECURITY)->fetch();
+
+// disable both filters
+$profiles = $this->profileQueryObjectFactory->create()->disableFilter([ProfileQueryObject::FILTER_IS_ACTIVE, ProfileQueryObject::FILTER_SECURITY])->fetch();
+```
+
+### Pagination
 
 ```php
 // returns ResultSet, suitable for pagination and for using in templates
-$userResultSet = $this->userQueryObjectFactory->create()->byLastName('Doe')->getResultSet(page: 1, itemsPerPage: 10);
+$profileResultSet = $this->profileQueryObjectFactory->create()->getResultSet(page: 1, itemsPerPage: 10);
 
 // ResultSet implements IteratorAggregate, so you can use it in foreach
-foreach ($userResultSet as $_user) {
-    echo $_user->getId();
+foreach ($profileResultSet as $_profile) {
+    echo $_profile->getId();
 }
 
 // or call getIterator
-$users = $userResultSet->getIterator();
+$profiles = $profileResultSet->getIterator();
 
 // returns Nette\Utils\Paginator
-$paginator = $userResultSet->getPaginator();
+$paginator = $profileResultSet->getPaginator();
 
-// returns total count of users
-$numberOfUsers = $userResultSet->count();
+// returns total count of profiles
+$numberOfProfile = $profileResultSet->count();
 ````
-
-```php
-// returns a user by ID or throws your own error when user does not exist
-if (!$user = $this->userQueryObjectFactory->create()->byId($id)->fetchOneOrNull()) {
-    return new \Exception('User not found.');
-}
-```
-
-```php
-// returns a user by ID or throws NoResultException when user does not exist
-$user = $this->userQueryObjectFactory->create()->byId(self::ADMIN_USER_ID)->fetchOne();
-```
-
-```php
-// returns first user with last name Doe, strict: false has to be specified,
-// otherwise NonUniqueResultException may be thrown
-$user = $this->userQueryObjectFactory->create()->byLastName('Doe')->fetchOneOrNull(strict: false);
-```
-
-```php
-// disabling default security filter, for example in console
-$users = $this->userQueryObjectFactory->create()->disableSecurityFilter()->byLastName('Doe')->fetch(limit: 10);
-```
-
-```php
-// returns users as an array of {User::getId(): User::getName()}
-$users = $this->userQueryObjectFactory->create()->fetchPairs('name', 'id');
-```
-
-## Tips
-
-- Always have all logic inside a `filter` or `order` callback. This will ensure that all dependencies are already set.
-
-- Don't use `addSelect` or `addOrder` inside a `filter` callback.
-
-- If you need `addSelect` in your `order` callback, be sure to mark it `AS HIDDEN`.
-
-- Don't use `leftJoin` or `innerJoin` on QueryBuilder, use `QueryObject::leftJoin` or `QueryObject::innerJoin` instead. This ensures that same joins are not used multiple times.
-
-- Always use `and*` methods (`andWhere`, `andSelect`, ...) on QueryBuilder (instead of `where`, `select`, ...).
 
 ## Advanced usage
 
-### Method `initSelect`
+### Manul joins
+
+For manual joins you should use `innerJoin` and `leftJoin` methods:
+
+```php
+public function joinArtificialConsultant(QueryBuilder $qb)
+{
+	$this->leftJoin($qb, 'e.artificialConsultant', 'e_ac');
+}
+
+public function byShowOnWeb(): static
+{
+	$this->filter[] = function (QueryBuilder $qb) {
+		$this->joinArtificialConsultant($qb);
+		$qb->andWhere('e.showOnWeb = TRUE OR (e.artificialConsultant IS NOT NULL AND e_ac.showOnWeb = TRUE)');
+	};
+
+	return $this;
+}
+```
+
+Unlike `QueryBuilder::innerJoin` and `QueryBuilder::leftJoin`, this ensures that same joins are not used multiple times.
+
+### More columns
+
+Don't use `addSelect` inside a `filter` callback. Use `initSelect` method instead:
 
 ```php
 class OfficeMessageGridQuery extends OfficeMessageQuery
@@ -213,16 +267,10 @@ class OfficeMessageGridQuery extends OfficeMessageQuery
 }
 ```
 
-Thanks to `initSelect`, we can add more columns to the result. 
-
-When using `initSelect`, only `getResultSet` or own method is allowed to use for fetching results (you can't use default `fetch*` methods).
-
-### Own fetching methods
-
-When you need to specify own columns, you have to create own fetching method:
+Or create your own fetching method:
 
 ```php
-class UserStatisticsQuery extends UserQuery
+class IdentityStatisticsQueryObject extends IdentityQueryObject
 {
 	/**
 	 * @return array{'LT25': int, 'BT25ND35': int, 'BT35N45': int, 'BT45N55': int, 'BT55N65': int, 'GT65': int}
@@ -245,81 +293,74 @@ class UserStatisticsQuery extends UserQuery
 }
 ```
 
-### Use in batch processing
+When there are more columns specified, default `fetch*` method won't work.
 
-When you want to iterate large number of records, you can use https://github.com/Ocramius/DoctrineBatchUtils together with query object: 
+### More complex sorting
+
+You can create your own sorting callback instead of using `orderBy` method:
 
 ```php
-$em = \Doctrine\ORM\EntityManager::create($this->connection, $this->config);
+public function orderByClosestDistance($customerLongitude, $customerLatitude): static
+{
+	$this->order = function (QueryBuilder $qb) use ($customerLongitude, $customerLatitude) {
+		$qb->addSelect('
+				( 6373 * acos( cos( radians(:obcd_latitude) ) *
+				cos( radians( e.latitude ) ) *
+				cos( radians( e.longitude ) -
+				radians(:obcd_longitude) ) +
+				sin( radians(:obcd_latitude) ) *
+				sin( radians( e.latitude ) ) ) )
+				AS HIDDEN distance'
+			)
+			->addOrderBy('distance', 'ASC')
+			->setParameter('obcd_latitude', $customerLatitude)
+			->setParameter('obcd_longitude', $customerLongitude);
+		};
 
-$users = SimpleBatchIteratorAggregate::fromTraversableResult(
-	$this->userQueryFactory->create()->setEntityManager($em)->fetchIterable(),
+		return $this;
+	}
+```
+
+Don't forget to use `AS HIDDEN` in your `addSelect` method, otherwise the `fetch*` methods won't work.
+
+### Method `orById`
+
+If you want to get all active records plus a specific one, you can use `orById` method to bypass default filters:
+
+```php
+$profiles = $this->profileQueryObjectFactory->create()->orById($id)->fetch();
+```
+
+It's especially useful for `<select>`.
+
+### Use in batch processing
+
+If you want to iterate large number of records, you can use https://github.com/Ocramius/DoctrineBatchUtils together with query object: 
+
+```php
+$em = EntityManager::create($this->connection, $this->config);
+
+$profile = SimpleBatchIteratorAggregate::fromTraversableResult(
+	$this->profileQueryObjectFactory->create()->setEntityManager($em)->fetchIterable(),
 	$em,
 	100 // flush/clear after 100 iterations
 );
 
-foreach ($users as $_user) {
+foreach ($profiles as $_profile) {
 	
 }
 ```
 
-You should always use own EntityManager instance, not the default one (because of entity manager clearing).
+You should always use new `EntityManager` instance, not the default one (because of `EntityManager::clear`).
 
-## Using `searchIn` and `*Join`
+## Tips
 
-Entities used in examples.
+- Always have all logic inside a `filter` or `order` callback. This will ensure that all dependencies (like a logged user etc.) are already set.
 
-* Library
-  * Book
-    * Author
+- Always use `and*` methods (`andWhere`, `andSelect`, ...) on QueryBuilder (instead of `where`, `select`, ...).
 
-Examples are in `LibraryQuery`
+- Don't use `QueryBuilder::resetDQLPart` method, because it's againt basic idea of QueryObject
 
+- Parameters in `andWhere` method should by named by method name and parametr name to avoid collision.
 
-### Simple
-
-Joins are done automatically when using `searchIn`
-
-    public function byAuthorName(string $name) {
-        $this->searchIn('books.author.name', $name);
-    }
-
-
-### Own joins
-
-Use `BaseQuery::leftJoin` and `BaseQuery::innerJoin` to join with extended conditions and with simple filtering.
-
-    public function byAuthorName(string $name) {
-        $this->leftJoin('books', 'book', '...', '...');
-        $this->innerJoin('book.author', author, '...', '...');
-        $this->searchIn('books.author.name', $name);
-    }
-
-
-### Own filter
-
-Use automatic joins and a custom extended filter
-
-    public function byAuthorIsAdult(int $age = 18) {
-        $this->addJoins('books.author');
-        $this->filter[] = function (QueryBuilder $qb) use ($age) {
-            $qb->andWhere('author >= :age', $age)
-                ->setParameter('age', $age);
-            };
-        };
-        return $this;
-    }
-
-
-### Own join and filter
-
-Use `QueryObject::leftJoin` and `QueryObject::leftJoin` and a custom filter.
-
-    public function byAuthorIsAdult(int $age = 18) {
-        $this->leftJoin('....');
-        $this->innerJoin('....');
-        $this->filter[] = function (QueryBuilder $qb) use ($age) {
-            ....
-        };
-        return $this;
-    }
+- Methods `by` and `orderBy` are public methods, but it's always better to create own `by*` or `orderBy` method.
