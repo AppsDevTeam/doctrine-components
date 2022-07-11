@@ -55,7 +55,7 @@ class ProfileQueryObject extends QueryObject implements FetchInterface
 	
 	public function search(string $value)
 	{
-	    $this->by(['identity.firstName', 'identity.lastName', 'identity.email', 'identity.phone'], $value);
+		$this->by(['identity.firstName', 'identity.lastName', 'identity.email', 'identity.phone'], $value);
 
 		return $this;
 	}
