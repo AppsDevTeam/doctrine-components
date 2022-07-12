@@ -2,9 +2,6 @@
 
 namespace ADT\DoctrineComponents;
 
-use App\Model\Queries\EventQuery;
-use App\Model\Queries\UserAgreementQuery;
-use App\Model\Queries\UserQuery;
 use ArrayIterator;
 use Closure;
 use Doctrine;
@@ -259,7 +256,7 @@ abstract class QueryObject implements FetchInterface
 
 		// we need to use a reference to allow adding a filter inside another filter
 		foreach ($this->filter as &$_filter) {
-			$_filter($qb);
+			$_filter->call($this, $qb);
 		}
 		unset ($_filter);
 
@@ -287,7 +284,7 @@ abstract class QueryObject implements FetchInterface
 		}
 
 		if ($withOrder && $this->order) {
-			($this->order)($qb);
+			$this->order->call($this, $qb);
 		}
 
 		return $qb;
@@ -528,7 +525,7 @@ abstract class QueryObject implements FetchInterface
 		/** @var Doctrine\ORM\Query\Expr\Select $_selectDQL */
 		foreach ($qb->getDQLPart('select') as $_selectDQL) {
 			foreach ($_selectDQL->getParts() as $_select) {
-				if ($_select !== $this->entityAlias && !str_contains($_select, 'AS HIDDEN')) {
+				if ($_select !== $this->entityAlias && stristr($_select, 'AS HIDDEN') === false) {
 					return true;
 				}
 			}

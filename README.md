@@ -32,7 +32,7 @@ class ProfileQueryObject extends QueryObject implements FetchInterface
 		parent::init();
 		
 		$this->filter[self::FILTER_SECURITY] = function (QueryBuilder $qb) {
-			if (!$this->securityUser->isAdmin()) {
+			if (!$this->securityUser->isAllowed('global.users')) {
 			    $qb->andWhere('e.id = :init_id')
 			        ->setParameter('id', $this->securityUser->getId())
 			}
@@ -146,7 +146,7 @@ $profiles = $this->profileQueryObjectFactory->create()->search('Doe')->fetch();
 // returns all disabled profiles
 $profiles = $this->profileQueryObjectFactory->create()->byIsActive(false)->fetch();
 
-// returns first 10 profiles
+// returns first 10 active profiles
 $profiles = $this->profileQueryObjectFactory->create()->fetch(limit: 10);
 ```
 
@@ -172,7 +172,7 @@ $profiles = $this->profileQueryObjectFactory->create()->fetchPairs('name', 'id')
 ```
 
 ```php
-// returns array of profile ids
+// returns array of active profile ids
 $profileIds = $this->profileQueryObjectFactory->create()->fetchField('id');
 ```
 
