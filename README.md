@@ -39,8 +39,11 @@ class ProfileQueryObject extends QueryObject implements FetchInterface
 		};
 		
 		$this->byIsActive(true);
-		
-		$this->orderBy(['identity.lastName' => 'ASC', 'identity.firstName' => 'ASC']);
+	}
+	
+	protected function setDefaultOrder(): void
+	{
+		$this->orderBy(['identity.lastName' => 'ASC', 'identity.firstName' => 'ASC', 'id' => 'ASC']);
 	}
 	
 	public function byIsActive(bool $isActive): static
@@ -73,6 +76,10 @@ class ProfileQueryObject extends QueryObject implements FetchInterface
 
 The `getEntityClass` method must be specified and return your entity class.
 
+### Method `setDefaultOrder`
+
+The `setDefaultOrder` method must be specified and set the default order.
+
 ### Method `init`
 
 The init method is used to specify default filters and order. You have to always call `parent::init()` when you use it.
@@ -81,7 +88,9 @@ The init method is used to specify default filters and order. You have to always
 
 `filter` is array of callbacks which will be applied on `QueryBuilder` when created.
 
-### Method `by`
+Similarly you can use `order` callback for setting the query object order.
+
+### Method `by` and `orderBy`
 
 Method `by` is a shortcut for creating `filter` callbacks. It offers some useful features:
 
@@ -91,15 +100,11 @@ Method `by` is a shortcut for creating `filter` callbacks. It offers some useful
 
 - If you would like get all value in certain range, you can use parameter `filterType` with value `FilterTypeEnum::RANGE`.
 
-- You can use dot notation to auto join other entities.
+Method `orderBy` is a shortcut for setting `order` callback.
 
-### Method `orderBy`
+- You can use a column name as first parameter and ASC/DESC as a second parameter instead of an array, if you need to sort only by one column.
 
-Method `orderBy` creates a callback which will be applied on `QueryBuilder` when created.
-
-You can use a column name as first parameter and ASC/DESC as a second parameter instead of an array, if you need to sort only by one column.
-
-You can also use dot notation to auto join other entities.
+You can use dot notation to auto join other entities.
 
 ## Basic usage
 
@@ -217,7 +222,7 @@ $paginator = $profileResultSet->getPaginator();
 $numberOfProfile = $profileResultSet->count();
 ````
 
-## Advanced usage
+## Advanced features
 
 ### Manul joins
 
@@ -276,7 +281,7 @@ class IdentityStatisticsQueryObject extends IdentityQueryObject
 	 */
 	public function getAgeRange(): array
 	{
-		$qb = $this->createQueryBuilder(withSelect: false, withOrder: false);
+		$qb = $this->createQueryBuilder(withSelectAndOrder: false);
 
 		$qb->addSelect('
 			SUM(CASE WHEN TIMESTAMPDIFF(YEAR, ei.birthDate, CURRENT_DATE()) < 25 THEN 1 ELSE 0 END) AS ' . UserEnum::AGE_RANGE_LT25 . ',
@@ -314,10 +319,10 @@ public function orderByClosestDistance($customerLongitude, $customerLatitude): s
 			->addOrderBy('distance', 'ASC')
 			->setParameter('obcd_latitude', $customerLatitude)
 			->setParameter('obcd_longitude', $customerLongitude);
-		};
+	};
 
-		return $this;
-	}
+	return $this;
+}
 ```
 
 Don't forget to use `AS HIDDEN` in your `addSelect` method, otherwise the `fetch*` methods won't work.
@@ -363,3 +368,5 @@ You should always use new `EntityManager` instance, not the default one (because
 - Parameters in `andWhere` method should by named by method name and parametr name to avoid collision.
 
 - Methods `by` and `orderBy` are public methods, but it's always better to create own `by*` or `orderBy` method.
+
+- You should always specify a deterministic order, ideally with usage of primary key.

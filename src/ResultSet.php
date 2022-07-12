@@ -63,17 +63,8 @@ class ResultSet implements IteratorAggregate
 			return $this->results;
 		}
 
-		$qb = $this->qo->createQueryBuilder();
-
-		if (!$qb->getDQLPart('groupBy')) {
-			// we always want to have a deterministic order
-			$qb->addOrderBy('e.id', 'ASC');
-		} elseif (!$qb->getDQLPart('orderBy')) {
-			throw new \Exception('You should always set ORDER BY when paginating and ensure to be deterministic (ideally using UNIQUE columns).');
-		}
-
 		$this->results = new \ArrayIterator(
-			$this->qo->getQuery($qb)
+			$this->qo->getQuery()
 				->setMaxResults($this->itemsPerPage)
 				->setFirstResult($this->itemsPerPage * ($this->page - 1))
 				->getResult()

@@ -50,6 +50,7 @@ abstract class QueryObject implements FetchInterface
 	private bool $isInitialized = false;
 
 	abstract protected function getEntityClass(): string;
+	abstract protected function setDefaultOrder(): void;
 
 	final public function __construct(EntityManagerInterface $em)
 	{
@@ -92,8 +93,6 @@ abstract class QueryObject implements FetchInterface
 	 */
 	final public function byId($id): static
 	{
-		$this->filter = [];
-
 		if (is_iterable($id) && !is_string($id)) {
 			foreach ($id as $item) {
 				if (is_object($item)) {
@@ -246,7 +245,7 @@ abstract class QueryObject implements FetchInterface
 	/**
 	 * @throws Exception
 	 */
-	final public function createQueryBuilder(bool $withSelect = true, bool $withOrder = true): QueryBuilder
+	final public function createQueryBuilder(bool $withSelectAndOrder = true): QueryBuilder
 	{
 		$qb = $this->em->createQueryBuilder()->from($this->getEntityClass(), $this->entityAlias);
 
@@ -277,12 +276,12 @@ abstract class QueryObject implements FetchInterface
 				->setParameter('byIdFilter', $this->byIdFilter);
 		}
 
-		if ($withSelect) {
+		if ($withSelectAndOrder) {
 			$this->initSelect($qb);
-		}
 
-		if ($withOrder && $this->order) {
-			$this->order->call($this, $qb);
+			if ($this->order) {
+				$this->order->call($this, $qb);
+			}
 		}
 
 		return $qb;
@@ -467,7 +466,7 @@ abstract class QueryObject implements FetchInterface
 	 */
 	public function fetchField(string $field): array
 	{
-		$qb = $this->createQueryBuilder(false, false);
+		$qb = $this->createQueryBuilder(false);
 
 		if ($this->hasModifiedColumns($qb)) {
 			throw new \Exception('Cannot call fetchField on a query object with modified columns.');
@@ -498,7 +497,7 @@ abstract class QueryObject implements FetchInterface
 	 */
 	final public function count(): int
 	{
-		$qb = $this->createQueryBuilder(false, false);
+		$qb = $this->createQueryBuilder(false);
 
 		$qb->select('COUNT(e.id)');
 
