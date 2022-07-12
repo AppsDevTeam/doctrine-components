@@ -57,9 +57,11 @@ abstract class QueryObject implements FetchInterface
 		$this->em = $em;
 
 		$this->init();
-		if ($this->isInitialized) {
+		if (!$this->isInitialized) {
 			throw new \Exception('Always call "parent::init()" when overriding the "init" method.');
 		}
+
+		$this->setDefaultOrder();
 	}
 
 	final public function getEntityManager(): ?EntityManagerInterface
@@ -147,7 +149,7 @@ abstract class QueryObject implements FetchInterface
 
 		return $this;
 	}
-	
+
 	final public function disableFilter(array|string $filter)
 	{
 		foreach ((array) $filter as $_filter) {
@@ -510,7 +512,7 @@ abstract class QueryObject implements FetchInterface
 
 		return (int) $query->getSingleScalarResult();
 	}
-	
+
 	final public function getResultSet(int $page, int $itemsPerPage): ResultSet
 	{
 		return new ResultSet($this, $page, $itemsPerPage);
@@ -530,7 +532,7 @@ abstract class QueryObject implements FetchInterface
 
 		return false;
 	}
-	
+
 	/**************
 	 * POST FETCH *
 	 **************/
