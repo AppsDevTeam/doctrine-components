@@ -4,6 +4,7 @@ namespace ADT\DoctrineComponents;
 
 use App\Model\Queries\EventQuery;
 use App\Model\Queries\UserAgreementQuery;
+use App\Model\Queries\UserQuery;
 use ArrayIterator;
 use Closure;
 use Doctrine;
@@ -207,6 +208,10 @@ abstract class QueryObject implements FetchInterface
 				$column = [$column => $order];
 			}
 
+			if (empty($column)) {
+				throw new \Exception('Parameter "$column" cannot be empty.');
+			}
+
 			$isFirst = true;
 			foreach ($column as $_sort => $_order) {
 				if (property_exists($this->getEntityClass(), $_sort)) {
@@ -230,9 +235,9 @@ abstract class QueryObject implements FetchInterface
 	 * QUERY BUILDER AND QUERY *
 	 ***************************/
 
-	final public function getQuery(QueryBuilder $qb): Doctrine\ORM\Query
+	final public function getQuery(?QueryBuilder $qb = null): Doctrine\ORM\Query
 	{
-		$query = $qb->getQuery();
+		$query = ($qb ?: $this->createQueryBuilder())->getQuery();
 
 		foreach ($this->hints as $_name => $_value) {
 			$query->setHint($_name, $_value);
@@ -500,12 +505,14 @@ abstract class QueryObject implements FetchInterface
 	{
 		$qb = $this->createQueryBuilder(false, false);
 
+		$qb->select('COUNT(e.id)');
+
 		if ($qb->getDQLPart('groupBy')) {
 			$paginator = new Doctrine\ORM\Tools\Pagination\Paginator($qb);
 			return $paginator->count();
 		}
 
-		$query = $this->getQuery($qb->select('COUNT(e.id)'));
+		$query = $this->getQuery($qb);
 
 		return (int) $query->getSingleScalarResult();
 	}

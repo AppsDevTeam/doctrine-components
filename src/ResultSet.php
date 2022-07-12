@@ -69,7 +69,7 @@ class ResultSet implements IteratorAggregate
 			// we always want to have a deterministic order
 			$qb->addOrderBy('e.id', 'ASC');
 		} elseif (!$qb->getDQLPart('orderBy')) {
-			throw new \Exception('You should always set ORDER BY when paginating and ensure to be deterministic.');
+			throw new \Exception('You should always set ORDER BY when paginating and ensure to be deterministic (ideally using UNIQUE columns).');
 		}
 
 		$this->results = new \ArrayIterator(
