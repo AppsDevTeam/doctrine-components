@@ -248,9 +248,7 @@ abstract class QueryObject implements FetchInterface
 	 */
 	final public function createQueryBuilder(bool $withSelect = true, bool $withOrder = true): QueryBuilder
 	{
-		$qb = $this->em->getRepository($this->getEntityClass())->createQueryBuilder($this->entityAlias);
-
-		$qb->resetDQLPart('select');
+		$qb = $this->em->createQueryBuilder()->from($this->getEntityClass(), $this->entityAlias);
 
 		$this->join = [];
 
@@ -329,7 +327,7 @@ abstract class QueryObject implements FetchInterface
 		return $this->commonJoin($qb, __FUNCTION__, $join, $alias, $conditionType, $condition, $indexBy);
 	}
 
-	private function addColumnPrefix(?string $column = NULL): string
+	protected final function addColumnPrefix(?string $column = NULL): string
 	{
 		if ((!str_contains($column, '.')) && (!str_contains($column, '\\'))) {
 			$column = $this->entityAlias . '.' . $column;
