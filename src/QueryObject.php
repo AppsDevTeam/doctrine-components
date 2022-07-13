@@ -52,13 +52,16 @@ abstract class QueryObject implements FetchInterface
 	abstract protected function getEntityClass(): string;
 	abstract protected function setDefaultOrder(): void;
 
+	/**
+	 * @throws Exception
+	 */
 	final public function __construct(EntityManagerInterface $em)
 	{
 		$this->em = $em;
 
 		$this->init();
 		if (!$this->isInitialized) {
-			throw new \Exception('Always call "parent::init()" when overriding the "init" method.');
+			throw new Exception('Always call "parent::init()" when overriding the "init" method.');
 		}
 
 		$this->setDefaultOrder();
@@ -153,7 +156,7 @@ abstract class QueryObject implements FetchInterface
 	final public function disableFilter(array|string $filter)
 	{
 		foreach ((array) $filter as $_filter) {
-			unset($this->filter[$filter]);
+			unset($this->filter[$_filter]);
 		}
 	}
 
@@ -169,9 +172,9 @@ abstract class QueryObject implements FetchInterface
 	 */
 	final public function by(array|string $column, mixed $value, bool $strict = false, ?string $joinType = self::JOIN_INNER): static
 	{
-		$this->addJoins((array)$column, $joinType);
+		$this->filter[] = function (QueryBuilder $qb) use ($column, $value, $strict, $joinType) {
+			$this->addJoins($qb, (array)$column, $joinType);
 
-		$this->filter[] = function (QueryBuilder $qb) use ($column, $value, $strict) {
 			$x = array_map(
 				function($_column) use ($qb, $value, $strict) {
 					$paramName = 'by_' . str_replace('.', '_', $_column);
@@ -207,7 +210,7 @@ abstract class QueryObject implements FetchInterface
 			}
 
 			if (empty($column)) {
-				throw new \Exception('Parameter "$column" cannot be empty.');
+				throw new Exception('Parameter "$column" cannot be empty.');
 			}
 
 			$isFirst = true;
@@ -262,7 +265,7 @@ abstract class QueryObject implements FetchInterface
 		$forbiddenDQLParts = ['select', 'distinct', 'orderBy'];
 		foreach ($forbiddenDQLParts as $_forbiddenDQLPart) {
 			if ($qb->getDQLPart($_forbiddenDQLPart)) {
-				throw new \Exception('Modifying "' . $_forbiddenDQLPart . '" DQL part in filters is not allowed.');
+				throw new Exception('Modifying "' . $_forbiddenDQLPart . '" DQL part in filters is not allowed.');
 			}
 		}
 
@@ -281,9 +284,7 @@ abstract class QueryObject implements FetchInterface
 		if ($withSelectAndOrder) {
 			$this->initSelect($qb);
 
-			if ($this->order) {
-				$this->order->call($this, $qb);
-			}
+			$this->order?->call($this, $qb);
 		}
 
 		return $qb;
@@ -293,7 +294,7 @@ abstract class QueryObject implements FetchInterface
 	 * JOINS *
 	 *********/
 
-	private function addJoins(array $columns, ?string $joinType): void
+	private function addJoins(QueryBuilder $qb, array $columns, ?string $joinType): void
 	{
 		if (!is_null($joinType)) {
 			foreach ($columns as $column) {
@@ -308,7 +309,7 @@ abstract class QueryObject implements FetchInterface
 							$join = $aliasLast ? $aliasLast . '.' . $aliasNew : $this->addColumnPrefix($aliasNew);
 							$filterKey = $this->getJoinFilterKey($joinType, $join, $aliasNew);
 							if (!$this->isAlreadyJoined($filterKey)) {
-								$this->commonJoin($joinType, $join, $aliasNew);
+								$this->commonJoin($qb, $joinType, $join, $aliasNew);
 							}
 							$aliasLast = $aliasNew;
 						}
@@ -336,7 +337,7 @@ abstract class QueryObject implements FetchInterface
 		return $column;
 	}
 
-	private function getJoinedEntityColumnName(string $column): string
+	final protected function getJoinedEntityColumnName(string $column): string
 	{
 		return implode('.', array_slice(explode('.', $column), -2));
 	}
@@ -371,13 +372,14 @@ abstract class QueryObject implements FetchInterface
 	/**
 	 * @return TEntity[]
 	 * @throws ReflectionException
+	 * @throws Exception
 	 */
 	final public function fetch(?int $limit = null): array
 	{
 		$qb = $this->createQueryBuilder();
 
 		if ($this->hasModifiedColumns($qb)) {
-			throw new \Exception('Cannot call ' . __METHOD__ . ' on a query object with modified columns.');
+			throw new Exception('Cannot call ' . __METHOD__ . ' on a query object with modified columns.');
 		}
 
 		$query = $this->getQuery($qb);
@@ -388,7 +390,7 @@ abstract class QueryObject implements FetchInterface
 
 		$result = $query->getResult();
 
-		$this->postFetch(new \ArrayIterator($result));
+		$this->postFetch(new ArrayIterator($result));
 
 		return $result;
 	}
@@ -402,7 +404,7 @@ abstract class QueryObject implements FetchInterface
 		$qb = $this->createQueryBuilder();
 
 		if ($this->hasModifiedColumns($qb)) {
-			throw new \Exception('Cannot call ' . __METHOD__ . ' on a query object with modified columns.');
+			throw new Exception('Cannot call ' . __METHOD__ . ' on a query object with modified columns.');
 		}
 
 		return $this->getQuery($qb)->toIterable();
@@ -412,7 +414,7 @@ abstract class QueryObject implements FetchInterface
 	 * @return TEntity
 	 * @throws NoResultException
 	 * @throws NonUniqueResultException
-	 * @throws \ReflectionException
+	 * @throws ReflectionException
 	 */
 	final public function fetchOne(bool $strict = true): object
 	{
@@ -434,7 +436,7 @@ abstract class QueryObject implements FetchInterface
 	/**
 	 * @return TEntity
 	 * @throws NonUniqueResultException
-	 * @throws \ReflectionException
+	 * @throws ReflectionException
 	 */
 	public function fetchOneOrNull(bool $strict = true): object|null
 	{
@@ -471,7 +473,7 @@ abstract class QueryObject implements FetchInterface
 		$qb = $this->createQueryBuilder(false);
 
 		if ($this->hasModifiedColumns($qb)) {
-			throw new \Exception('Cannot call fetchField on a query object with modified columns.');
+			throw new Exception('Cannot call fetchField on a query object with modified columns.');
 		}
 
 		$identifierFieldName = $this->em->getClassMetadata($this->getEntityClass())->getIdentifierFieldNames()[0];
@@ -691,9 +693,9 @@ abstract class QueryObject implements FetchInterface
 				->getQuery()
 				->getResult();
 
-			if ($association['type'] & Doctrine\ORM\Mapping\ClassMetadataInfo::TO_ONE) {
-				// Doctrina nám entity přiřadí
-			} elseif ($association['type'] & Doctrine\ORM\Mapping\ClassMetadataInfo::TO_MANY) {
+			// v pripadne TO_ONE nám Doctrine entity přiřadí
+			// musime tedy poresit jen TO_MANY
+			if ($association['type'] & Doctrine\ORM\Mapping\ClassMetadataInfo::TO_MANY) {
 				$refCollProperty = new ReflectionProperty(get_class($firstRootEntity), $association['fieldName']);
 				$refCollProperty->setAccessible(true);
 
