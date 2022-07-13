@@ -294,7 +294,7 @@ abstract class QueryObject implements FetchInterface
 	 * JOINS *
 	 *********/
 
-	private function addJoins(QueryBuilder $qb, array $columns, ?string $joinType): void
+	final protected function addJoins(QueryBuilder $qb, array $columns, ?string $joinType): void
 	{
 		if (!is_null($joinType)) {
 			foreach ($columns as $column) {
