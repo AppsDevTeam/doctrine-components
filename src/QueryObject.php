@@ -23,7 +23,7 @@ use ReflectionProperty;
 /**
  * @template TEntity of object
  */
-abstract class QueryObject implements FetchInterface
+abstract class QueryObject
 {
 	const JOIN_INNER = 'innerJoin';
 	const JOIN_LEFT = 'leftJoin';
