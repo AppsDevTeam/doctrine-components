@@ -173,7 +173,11 @@ abstract class QueryObject
 	final public function by(array|string $column, mixed $value, bool $strict = false, ?string $joinType = self::JOIN_INNER): static
 	{
 		$this->filter[] = function (QueryBuilder $qb) use ($column, $value, $strict, $joinType) {
-			$this->addJoins($qb, (array)$column, $joinType);
+			$column = (array) $column;
+
+			$this->validateFieldNames($column);
+
+			$this->addJoins($qb, $column, $joinType);
 
 			$x = array_map(
 				function($_column) use ($qb, $value, $strict) {
@@ -195,41 +199,55 @@ abstract class QueryObject
 					}
 					return $condition;
 				},
-				(array)$column
+				$column
 			);
 			$qb->andWhere($qb->expr()->orX(...$x));
 		};
 		return $this;
 	}
 
-	final public function orderBy(array|string $column, string $order = 'ASC'): static
+	/**
+	 * @param array{string: string}|string $field
+	 * @param string|null $order
+	 * @return $this
+	 */
+	final public function orderBy(array|string $field, ?string $order = null): static
 	{
-		$this->order = function (QueryBuilder $qb) use ($column, $order) {
-			if (is_string($column)) {
-				$column = [$column => $order];
+		$this->order = function (QueryBuilder $qb) use ($field, $order) {
+			if (is_string($field)) {
+				$field = [$field => $order];
+			} elseif ($order) {
+				throw new \Exception ('Do not specify "$order" if "$field" is an array.');
 			}
 
-			if (empty($column)) {
-				throw new Exception('Parameter "$column" cannot be empty.');
+			if (empty($field)) {
+				throw new Exception('Parameter "$field" cannot be empty.');
 			}
 
-			$isFirst = true;
-			foreach ($column as $_sort => $_order) {
-				if (property_exists($this->getEntityClass(), $_sort)) {
-					$_sort = $this->addColumnPrefix($_sort);
-				}
+			$this->validateFieldNames($field);
 
-				if ($isFirst) {
-					$qb->orderBy($_sort, $_order);
-				} else {
-					$qb->addOrderBy($_sort, $_order);
-				}
+			$this->addJoins($qb, array_keys($field));
 
-				$isFirst = false;
+			$qb->resetDQLPart('orderBy');
+			foreach ($field as $_name => $_order) {
+				$_name = $this->addColumnPrefix($_name);
+				$_name = $this->getJoinedEntityColumnName($_name);
+
+				$qb->addOrderBy($_name, $_order);
 			}
 		};
 
 		return $this;
+	}
+
+	/** @internal */
+	final protected function validateFieldNames(array $fields): void
+	{
+		foreach ($fields as $_name => $_order) {
+			if (explode('.', $_name)[0] === $this->entityAlias) {
+				throw new \Exception('Do not use entity alias in field names.');
+			}
+		}
 	}
 
 	/***************************
@@ -294,31 +312,6 @@ abstract class QueryObject
 	 * JOINS *
 	 *********/
 
-	final protected function addJoins(QueryBuilder $qb, array $columns, ?string $joinType): void
-	{
-		if (!is_null($joinType)) {
-			foreach ($columns as $column) {
-				if (str_contains($column, '.')) {
-					$aliases = explode('.', $column, -1);
-					if (count($aliases)) {
-						if ($aliases[0] == $this->entityAlias) {
-							unset($aliases[0]);
-						}
-						$aliasLast = null;
-						foreach ($aliases as $aliasNew) {
-							$join = $aliasLast ? $aliasLast . '.' . $aliasNew : $this->addColumnPrefix($aliasNew);
-							$filterKey = $this->getJoinFilterKey($joinType, $join, $aliasNew);
-							if (!$this->isAlreadyJoined($filterKey)) {
-								$this->commonJoin($qb, $joinType, $join, $aliasNew);
-							}
-							$aliasLast = $aliasNew;
-						}
-					}
-				}
-			}
-		}
-	}
-
 	final protected function leftJoin(QueryBuilder $qb, string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
 	{
 		return $this->commonJoin($qb, __FUNCTION__, $join, $alias, $conditionType, $condition, $indexBy);
@@ -329,7 +322,29 @@ abstract class QueryObject
 		return $this->commonJoin($qb, __FUNCTION__, $join, $alias, $conditionType, $condition, $indexBy);
 	}
 
-	protected final function addColumnPrefix(?string $column = NULL): string
+	/** @internal */
+	final protected function addJoins(QueryBuilder $qb, array $columns, string $joinType = self::JOIN_LEFT): void
+	{
+		foreach ($columns as $key => $column) {
+			// it's not a join
+			if (!str_contains($column, '.')) {
+				continue;
+			}
+
+			$aliasLast = null;
+			foreach (explode('.', $column, '-1') as $aliasNew) {
+				$join = $aliasLast ? $aliasLast . '.' . $aliasNew : $this->addColumnPrefix($aliasNew);
+				$filterKey = $this->getJoinFilterKey($joinType, $join, $aliasNew);
+				if (!$this->isAlreadyJoined($filterKey)) {
+					$this->commonJoin($qb, $joinType, $join, $aliasNew);
+				}
+				$aliasLast = $aliasNew;
+			}
+		}
+	}
+
+	/** @internal */
+	final protected function addColumnPrefix(?string $column = NULL): string
 	{
 		if ((!str_contains($column, '.')) && (!str_contains($column, '\\'))) {
 			$column = $this->entityAlias . '.' . $column;
@@ -337,6 +352,7 @@ abstract class QueryObject
 		return $column;
 	}
 
+	/** @internal */
 	final protected function getJoinedEntityColumnName(string $column): string
 	{
 		return implode('.', array_slice(explode('.', $column), -2));
