@@ -23,7 +23,7 @@ use ReflectionProperty;
 /**
  * @template TEntity of object
  */
-abstract class QueryObject
+abstract class QueryObject implements QueryObjectInterface
 {
 	const JOIN_INNER = 'innerJoin';
 	const JOIN_LEFT = 'leftJoin';
@@ -167,17 +167,16 @@ abstract class QueryObject
 	 * @param string|string[] $column
 	 * @param mixed $value
 	 * @param bool $strict
-	 * @param string|null $joinType
 	 * @return $this
 	 */
-	final public function by(array|string $column, mixed $value, bool $strict = false, ?string $joinType = self::JOIN_INNER): static
+	final public function by(array|string $column, mixed $value, bool $strict = false): static
 	{
-		$this->filter[] = function (QueryBuilder $qb) use ($column, $value, $strict, $joinType) {
+		$this->filter[] = function (QueryBuilder $qb) use ($column, $value, $strict) {
 			$column = (array) $column;
 
 			$this->validateFieldNames($column);
 
-			$this->addJoins($qb, $column, $joinType);
+			$this->addJoins($qb, $column);
 
 			$x = array_map(
 				function($_column) use ($qb, $value, $strict) {
@@ -323,8 +322,10 @@ abstract class QueryObject
 	}
 
 	/** @internal */
-	final protected function addJoins(QueryBuilder $qb, array $columns, string $joinType = self::JOIN_LEFT): void
+	final protected function addJoins(QueryBuilder $qb, array $columns): void
 	{
+		$joinType = self::JOIN_LEFT;
+
 		foreach ($columns as $key => $column) {
 			// it's not a join
 			if (!str_contains($column, '.')) {
@@ -454,7 +455,7 @@ abstract class QueryObject
 	 * @throws NonUniqueResultException
 	 * @throws ReflectionException
 	 */
-	public function fetchOneOrNull(bool $strict = true): object|null
+	final public function fetchOneOrNull(bool $strict = true): object|null
 	{
 		try {
 			return $this->fetchOne($strict);
