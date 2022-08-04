@@ -2,7 +2,7 @@
 
 namespace ADT\DoctrineComponents;
 
-class PageIsOutOfRangeException extends \OutOfRangeException
+class PageIsOutOfRangeException extends \Exception
 {
 
 }
