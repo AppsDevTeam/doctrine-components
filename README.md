@@ -104,7 +104,7 @@ Method `orderBy` is a shortcut for setting `order` callback.
 
 - You can use a column name as first parameter and ASC/DESC as a second parameter instead of an array, if you need to sort only by one column.
 
-You can use dot notation to auto join other entities.
+You can use dot notation to auto join other entities (left join is used).
 
 ## Basic usage
 
