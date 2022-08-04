@@ -7,6 +7,7 @@ use Closure;
 use Doctrine;
 use Doctrine\ORM\AbstractQuery;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\NonUniqueResultException;
 use Doctrine\ORM\NoResultException;
 use Doctrine\ORM\PersistentCollection;
 use Doctrine\ORM\QueryBuilder;
@@ -19,10 +20,11 @@ use ReflectionClass;
 use ReflectionException;
 use ReflectionProperty;
 
-abstract class QueryObject
+/**
+ * @template TEntity of object
+ */
+abstract class QueryObject implements QueryObjectInterface
 {
-	const ORDER_DEFAULT = 'order_default';
-
 	const JOIN_INNER = 'innerJoin';
 	const JOIN_LEFT = 'leftJoin';
 
@@ -35,18 +37,35 @@ abstract class QueryObject
 	/** @var Closure[] */
 	protected array $filter = [];
 
-	/** @var Closure[] */
-	protected array $select = [];
+	protected ?Closure $order = null;
 
 	protected array $hints = [];
 
 	protected array $postFetch = [];
 
-	protected ?string $entityClass = null;
-
 	protected ?EntityManagerInterface $em = null;
 
+	private array $join = [];
+
+	private bool $isInitialized = false;
+
 	abstract protected function getEntityClass(): string;
+	abstract protected function setDefaultOrder(): void;
+
+	/**
+	 * @throws Exception
+	 */
+	final public function __construct(EntityManagerInterface $em)
+	{
+		$this->em = $em;
+
+		$this->init();
+		if (!$this->isInitialized) {
+			throw new Exception('Always call "parent::init()" when overriding the "init" method.');
+		}
+
+		$this->setDefaultOrder();
+	}
 
 	final public function getEntityManager(): ?EntityManagerInterface
 	{
@@ -59,24 +78,19 @@ abstract class QueryObject
 		return $this;
 	}
 
-	final public function disableDefaultOrder(): static
+	protected function init(): void
 	{
-		unset($this->select[static::ORDER_DEFAULT]);
-		return $this;
+		$this->isInitialized = true;
 	}
 
-	final public function disableSelects(bool $disableDefaultOrder = false): static
+	protected function initSelect(QueryBuilder $qb): void
 	{
-		foreach ($this->select as $key => $select) {
-			if ($key === static::ORDER_DEFAULT && !$disableDefaultOrder) {
-				continue;
-			}
-
-			unset($this->select[$key]);
-		}
-
-		return $this;
+		$qb->select($this->entityAlias);
 	}
+
+	/*********************
+	 * FILTERS AND ORDER *
+	 *********************/
 
 	/**
 	 * @param int|int[]|IEntity|IEntity[]|[]|null $id
@@ -139,6 +153,13 @@ abstract class QueryObject
 		return $this;
 	}
 
+	final public function disableFilter(array|string $filter)
+	{
+		foreach ((array) $filter as $_filter) {
+			unset($this->filter[$_filter]);
+		}
+	}
+
 	/**
 	 * Obecná metoda na vyhledávání ve více sloupcích (spojení přes OR).
 	 * Podle vyhledávané hodnoty, případně parametru strict (LIKE vs. =), se zvolí typ vyhledávání (IN, LIKE, =).
@@ -146,24 +167,27 @@ abstract class QueryObject
 	 * @param string|string[] $column
 	 * @param mixed $value
 	 * @param bool $strict
-	 * @param string|null $joinType
 	 * @return $this
 	 */
-	final public function searchIn(array|string $column, mixed $value, bool $strict = false, ?string $joinType = self::JOIN_INNER): static
+	final public function by(array|string $column, mixed $value, bool $strict = false): static
 	{
-		$this->addJoins((array)$column, $joinType);
-
 		$this->filter[] = function (QueryBuilder $qb) use ($column, $value, $strict) {
+			$column = (array) $column;
+
+			$this->validateFieldNames($column);
+
+			$this->addJoins($qb, $column);
+
 			$x = array_map(
 				function($_column) use ($qb, $value, $strict) {
-					$paramName = 'searchIn_' . str_replace('.', '_', $_column);
+					$paramName = 'by_' . str_replace('.', '_', $_column);
 					$_column = $this->addColumnPrefix($_column);
 					$_column = $this->getJoinedEntityColumnName($_column);
 
 					if (is_array($value)) {
 						$condition = "$_column IN (:$paramName)";
 						$qb->setParameter($paramName, $value);
-					} else if (is_scalar($value) && !$strict) {
+					} else if (is_string($value) && !$strict) {
 						$condition = "$_column LIKE :$paramName";
 						$qb->setParameter($paramName, "%$value%");
 					} else if (is_null($value)) {
@@ -174,88 +198,208 @@ abstract class QueryObject
 					}
 					return $condition;
 				},
-				(array)$column
+				$column
 			);
 			$qb->andWhere($qb->expr()->orX(...$x));
 		};
 		return $this;
 	}
 
-	final public function addOrderBy(string $column, string $order = 'ASC'): static
-	{
-		if (property_exists($this->getEntityClass(), $column)) {
-			$column = $this->addColumnPrefix($column);
-		}
-		$this->select[] = function (QueryBuilder $qb) use ($column, $order) {
-			$qb->addOrderBy($column, $order);
-		};
-
-		return $this;
-	}
-
-	final public function orderBy(string $column, string $order = 'ASC'): static
-	{
-		if (property_exists($this->getEntityClass(), $column)) {
-			$column = $this->addColumnPrefix($column);
-		}
-		$this->select[] = function (QueryBuilder $qb) use ($column, $order) {
-			$qb->orderBy($column, $order);
-		};
-
-		return $this;
-	}
-
 	/**
-	 * Spustí postFetch. Nevolat přímo.
-	 * @throws ReflectionException
-	 * @internal
-	 */
-	final public function postFetch(Iterator $iterator): void
-	{
-		if (empty($this->postFetch)) {
-			return;
-		}
-
-		$rootEntities = iterator_to_array($iterator, TRUE);
-		static::doPostFetch($this->getEntityManager(), $rootEntities, $this->postFetch);
-	}
-
-	/**
-	 * Přidá pole do seznamu pro postFetch.
-	 * @param string $fieldName Může být název pole (např. "contact") nebo cesta (např. "commission.contract.client").
+	 * @param array{string: string}|string $field
+	 * @param string|null $order
 	 * @return $this
 	 */
-	final public function addPostFetch(string $fieldName): static
+	final public function orderBy(array|string $field, ?string $order = null): static
 	{
-		$this->postFetch[] = $fieldName;
+		$this->order = function (QueryBuilder $qb) use ($field, $order) {
+			if (is_string($field)) {
+				$field = [$field => $order];
+			} elseif ($order) {
+				throw new \Exception ('Do not specify "$order" if "$field" is an array.');
+			}
+
+			if (empty($field)) {
+				throw new Exception('Parameter "$field" cannot be empty.');
+			}
+
+			$this->validateFieldNames($field);
+
+			$this->addJoins($qb, array_keys($field));
+
+			$qb->resetDQLPart('orderBy');
+			foreach ($field as $_name => $_order) {
+				$_name = $this->addColumnPrefix($_name);
+				$_name = $this->getJoinedEntityColumnName($_name);
+
+				$qb->addOrderBy($_name, $_order);
+			}
+		};
+
 		return $this;
 	}
 
-	/**
-	 * @throws Doctrine\ORM\NonUniqueResultException
-	 * @throws NoResultException
-	 * @throws Exception
-	 */
-	final public function count(): int
+	/** @internal */
+	final protected function validateFieldNames(array $fields): void
 	{
-		$qb = $this->doCreateBasicQuery();
+		foreach ($fields as $_name => $_order) {
+			if (explode('.', $_name)[0] === $this->entityAlias) {
+				throw new \Exception('Do not use entity alias in field names.');
+			}
+		}
+	}
 
-		if ($qb->getDQLPart('groupBy')) {
-			$paginator = new Doctrine\ORM\Tools\Pagination\Paginator($qb);
-			return $paginator->count();
+	/***************************
+	 * QUERY BUILDER AND QUERY *
+	 ***************************/
+
+	final public function getQuery(?QueryBuilder $qb = null): Doctrine\ORM\Query
+	{
+		$query = ($qb ?: $this->createQueryBuilder())->getQuery();
+
+		foreach ($this->hints as $_name => $_value) {
+			$query->setHint($_name, $_value);
 		}
 
-		$query = $this->getQuery($qb->select('COUNT(e.id)'));
-
-		return (int) $query->getSingleScalarResult();
+		return $query;
 	}
 
 	/**
+	 * @throws Exception
+	 */
+	final public function createQueryBuilder(bool $withSelectAndOrder = true): QueryBuilder
+	{
+		$qb = $this->em->createQueryBuilder()->from($this->getEntityClass(), $this->entityAlias);
+
+		$this->join = [];
+
+		// we need to use a reference to allow adding a filter inside another filter
+		foreach ($this->filter as &$_filter) {
+			$_filter->call($this, $qb);
+		}
+		unset ($_filter);
+
+		$forbiddenDQLParts = ['select', 'distinct', 'orderBy'];
+		foreach ($forbiddenDQLParts as $_forbiddenDQLPart) {
+			if ($qb->getDQLPart($_forbiddenDQLPart)) {
+				throw new Exception('Modifying "' . $_forbiddenDQLPart . '" DQL part in filters is not allowed.');
+			}
+		}
+
+		//orById
+		if ($this->orByIdFilter && $qb->getDQLPart('where')) {
+			$qb->orWhere('e.id IN (:orByIdFilter)')
+				->setParameter('orByIdFilter', $this->orByIdFilter);
+		}
+
+		//byId
+		if ($this->byIdFilter !== null) {
+			$qb->andWhere('e.id IN (:byIdFilter)')
+				->setParameter('byIdFilter', $this->byIdFilter);
+		}
+
+		if ($withSelectAndOrder) {
+			$this->initSelect($qb);
+
+			$this->order?->call($this, $qb);
+		}
+
+		return $qb;
+	}
+
+	/*********
+	 * JOINS *
+	 *********/
+
+	final protected function leftJoin(QueryBuilder $qb, string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
+	{
+		return $this->commonJoin($qb, __FUNCTION__, $join, $alias, $conditionType, $condition, $indexBy);
+	}
+
+	final protected function innerJoin(QueryBuilder $qb, string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
+	{
+		return $this->commonJoin($qb, __FUNCTION__, $join, $alias, $conditionType, $condition, $indexBy);
+	}
+
+	/** @internal */
+	final protected function addJoins(QueryBuilder $qb, array $columns): void
+	{
+		$joinType = self::JOIN_LEFT;
+
+		foreach ($columns as $key => $column) {
+			// it's not a join
+			if (!str_contains($column, '.')) {
+				continue;
+			}
+
+			$aliasLast = null;
+			foreach (explode('.', $column, '-1') as $aliasNew) {
+				$join = $aliasLast ? $aliasLast . '.' . $aliasNew : $this->addColumnPrefix($aliasNew);
+				$filterKey = $this->getJoinFilterKey($joinType, $join, $aliasNew);
+				if (!$this->isAlreadyJoined($filterKey)) {
+					$this->commonJoin($qb, $joinType, $join, $aliasNew);
+				}
+				$aliasLast = $aliasNew;
+			}
+		}
+	}
+
+	/** @internal */
+	final protected function addColumnPrefix(?string $column = NULL): string
+	{
+		if ((!str_contains($column, '.')) && (!str_contains($column, '\\'))) {
+			$column = $this->entityAlias . '.' . $column;
+		}
+		return $column;
+	}
+
+	/** @internal */
+	final protected function getJoinedEntityColumnName(string $column): string
+	{
+		return implode('.', array_slice(explode('.', $column), -2));
+	}
+
+	private function commonJoin(QueryBuilder $qb, string $joinType, string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
+	{
+		$join = $this->addColumnPrefix($join);
+		$filterKey = $this->getJoinFilterKey($join, $alias, $conditionType, $condition, $indexBy);
+
+		if (! $this->isAlreadyJoined($filterKey)) {
+			$qb->$joinType($join, $alias, $conditionType, $condition, $indexBy);
+			$this->join[$filterKey] = true;
+		}
+
+		return $this;
+	}
+
+	private function getJoinFilterKey(string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): string
+	{
+		return implode('_', [$join, $alias, $conditionType, $condition, $indexBy]);
+	}
+
+	private function isAlreadyJoined(string $filterKey): bool
+	{
+		return isset($this->join[$filterKey]);
+	}
+
+	/*********
+	 * FETCH *
+	 *********/
+
+	/**
+	 * @return TEntity[]
+	 * @throws ReflectionException
 	 * @throws Exception
 	 */
 	final public function fetch(?int $limit = null): array
 	{
-		$query = $this->getQuery();
+		$qb = $this->createQueryBuilder();
+
+		if ($this->hasModifiedColumns($qb)) {
+			throw new Exception('Cannot call ' . __METHOD__ . ' on a query object with modified columns.');
+		}
+
+		$query = $this->getQuery($qb);
 
 		if ($limit) {
 			$query->setMaxResults($limit);
@@ -269,16 +413,55 @@ abstract class QueryObject
 	}
 
 	/**
+	 * @return TEntity[]
 	 * @throws Exception
 	 */
 	final public function fetchIterable(): Generator
 	{
-		return $this->getQuery()->toIterable();
+		$qb = $this->createQueryBuilder();
+
+		if ($this->hasModifiedColumns($qb)) {
+			throw new Exception('Cannot call ' . __METHOD__ . ' on a query object with modified columns.');
+		}
+
+		return $this->getQuery($qb)->toIterable();
 	}
 
-	final public function getResultSet(int $page, int $itemsPerPage): ResultSet
+	/**
+	 * @return TEntity
+	 * @throws NoResultException
+	 * @throws NonUniqueResultException
+	 * @throws ReflectionException
+	 */
+	final public function fetchOne(bool $strict = true): object
 	{
-		return new ResultSet($this, $page, $itemsPerPage);
+		$result = $this->fetch(2);
+
+		if (!$result) {
+			throw new NoResultException();
+		}
+
+		if ($strict && count($result) > 1) {
+			throw new NonUniqueResultException();
+		}
+
+		$this->postFetch(new ArrayIterator($result));
+
+		return $result[0];
+	}
+
+	/**
+	 * @return TEntity
+	 * @throws NonUniqueResultException
+	 * @throws ReflectionException
+	 */
+	final public function fetchOneOrNull(bool $strict = true): object|null
+	{
+		try {
+			return $this->fetchOne($strict);
+		} catch (NoResultException) {
+			return null;
+		}
 	}
 
 	/**
@@ -304,7 +487,11 @@ abstract class QueryObject
 	 */
 	public function fetchField(string $field): array
 	{
-		$qb = $this->doCreateBasicQuery();
+		$qb = $this->createQueryBuilder(false);
+
+		if ($this->hasModifiedColumns($qb)) {
+			throw new Exception('Cannot call fetchField on a query object with modified columns.');
+		}
 
 		$identifierFieldName = $this->em->getClassMetadata($this->getEntityClass())->getIdentifierFieldNames()[0];
 		if ($field === $identifierFieldName) {
@@ -325,59 +512,49 @@ abstract class QueryObject
 	}
 
 	/**
-	 * @throws NoResultException
 	 * @throws Doctrine\ORM\NonUniqueResultException
+	 * @throws NoResultException
 	 * @throws Exception
 	 */
-	final public function fetchOne(bool $strict = true): object|array
+	final public function count(): int
 	{
-		$result = $this->fetch(2);
+		$qb = $this->createQueryBuilder(false);
 
-		if (!$result) {
-			throw new NoResultException();
+		$qb->select('COUNT(e.id)');
+
+		if ($qb->getDQLPart('groupBy')) {
+			$paginator = new Doctrine\ORM\Tools\Pagination\Paginator($qb);
+			return $paginator->count();
 		}
 
-		if ($strict && count($result) > 1) {
-			throw new Doctrine\ORM\NonUniqueResultException();
-		}
+		$query = $this->getQuery($qb);
 
-		$this->postFetch(new ArrayIterator($result));
-
-		return $result[0];
+		return (int) $query->getSingleScalarResult();
 	}
 
-	/**
-	 * @throws Doctrine\ORM\NonUniqueResultException|ReflectionException
-	 */
-	final public function fetchOneOrNull(bool $strict = true): object|array|null
+	final public function getResultSet(int $page, int $itemsPerPage): ResultSet
 	{
-		try {
-			return $this->fetchOne($strict);
-		} catch (NoResultException) {
-			return null;
-		}
+		return new ResultSet($this, $page, $itemsPerPage);
 	}
 
-	/**
-	 * @throws Exception
-	 */
-	final public function getQuery(?QueryBuilder $qb = null): Doctrine\ORM\Query
-	{
-		if (! $qb) {
-			$qb = $this->doCreateBasicQuery();
 
-			foreach ($this->select as $modifier) {
-				$modifier($qb);
+	private function hasModifiedColumns(QueryBuilder $qb): bool
+	{
+		/** @var Doctrine\ORM\Query\Expr\Select $_selectDQL */
+		foreach ($qb->getDQLPart('select') as $_selectDQL) {
+			foreach ($_selectDQL->getParts() as $_select) {
+				if ($_select !== $this->entityAlias && stristr($_select, 'AS HIDDEN') === false) {
+					return true;
+				}
 			}
 		}
-		$query = $qb->getQuery();
 
-		foreach ($this->hints as $_name => $_value) {
-			$query->setHint($_name, $_value);
-		}
-
-		return $query;
+		return false;
 	}
+
+	/**************
+	 * POST FETCH *
+	 **************/
 
 	/**
 	 * @param EntityManagerInterface $em
@@ -533,9 +710,9 @@ abstract class QueryObject
 				->getQuery()
 				->getResult();
 
-			if ($association['type'] & Doctrine\ORM\Mapping\ClassMetadataInfo::TO_ONE) {
-				// Doctrina nám entity přiřadí
-			} elseif ($association['type'] & Doctrine\ORM\Mapping\ClassMetadataInfo::TO_MANY) {
+			// v pripadne TO_ONE nám Doctrine entity přiřadí
+			// musime tedy poresit jen TO_MANY
+			if ($association['type'] & Doctrine\ORM\Mapping\ClassMetadataInfo::TO_MANY) {
 				$refCollProperty = new ReflectionProperty(get_class($firstRootEntity), $association['fieldName']);
 				$refCollProperty->setAccessible(true);
 
@@ -616,111 +793,29 @@ abstract class QueryObject
 		}
 	}
 
-	final protected function addJoins(array $columns, ?string $joinType): void
+	/**
+	 * Spustí postFetch. Nevolat přímo.
+	 * @throws ReflectionException
+	 * @internal
+	 */
+	final public function postFetch(Iterator $iterator): void
 	{
-		if (!is_null($joinType)) {
-			foreach ($columns as $column) {
-				if (str_contains($column, '.')) {
-					$aliases = explode('.', $column, -1);
-					if (count($aliases)) {
-						if ($aliases[0] == $this->entityAlias) {
-							unset($aliases[0]);
-						}
-						$aliasLast = null;
-						foreach ($aliases as $aliasNew) {
-							$join = $aliasLast ? $aliasLast . '.' . $aliasNew : $this->addColumnPrefix($aliasNew);
-							$filterKey = $this->getJoinFilterKey($joinType, $join, $aliasNew);
-							if (!$this->isAlreadyJoined($filterKey)) {
-								$this->commonJoin($joinType, $join, $aliasNew);
-							}
-							$aliasLast = $aliasNew;
-						}
-					}
-				}
-			}
+		if (empty($this->postFetch)) {
+			return;
 		}
-	}
 
-	private function addColumnPrefix(?string $column = NULL): string
-	{
-		if ((!str_contains($column, '.')) && (!str_contains($column, '\\'))) {
-			$column = $this->entityAlias . '.' . $column;
-		}
-		return $column;
-	}
-
-	private function getJoinedEntityColumnName(string $column): string {
-		return implode('.', array_slice(explode('.', $column), -2));
-	}
-
-	private function join(string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
-	{
-		return $this->innerJoin($join, $alias, $conditionType, $condition, $indexBy);
-	}
-
-	private function leftJoin(string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
-	{
-		return $this->commonJoin(__FUNCTION__, $join, $alias, $conditionType, $condition, $indexBy);
-	}
-
-	private function innerJoin(?string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
-	{
-		return $this->commonJoin(__FUNCTION__, $join, $alias, $conditionType, $condition, $indexBy);
-	}
-
-	private function commonJoin(string $joinType, string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
-	{
-		$join = $this->addColumnPrefix($join);
-		$filterKey = $this->getJoinFilterKey($joinType, $join, $alias, $conditionType, $condition, $indexBy);
-		$this->filter[$filterKey] = function (QueryBuilder $qb) use ($joinType, $join, $alias, $conditionType, $condition, $indexBy) {
-			$qb->$joinType($join, $alias, $conditionType, $condition, $indexBy);
-		};
-		return $this;
-	}
-
-	private function getJoinFilterKey(string $joinType, string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): string
-	{
-		return implode('_', [$joinType, $join, $alias, $conditionType, $condition, $indexBy]);
-	}
-
-	private function isAlreadyJoined(string $filterKey): bool
-	{
-		$filterKey = str_replace(self::JOIN_INNER, '', $filterKey);
-		$filterKey = str_replace(self::JOIN_LEFT, '', $filterKey);
-		$filterKeyInner = self::JOIN_INNER . $filterKey;
-		$filterKeyLeft = self::JOIN_LEFT . $filterKey;
-
-		return isset($this->filter[$filterKeyInner]) || isset($this->filter[$filterKeyLeft]);
+		$rootEntities = iterator_to_array($iterator, TRUE);
+		static::doPostFetch($this->getEntityManager(), $rootEntities, $this->postFetch);
 	}
 
 	/**
-	 * @throws Exception
+	 * Přidá pole do seznamu pro postFetch.
+	 * @param string $fieldName Může být název pole (např. "contact") nebo cesta (např. "commission.contract.client").
+	 * @return $this
 	 */
-	private function doCreateBasicQuery(): QueryBuilder
+	final public function addPostFetch(string $fieldName): static
 	{
-		if (!$this->em) {
-			throw new Exception('Entity manager is not set! Use "setEntityManager()" first.');
-		}
-
-		$qb = $this->em->getRepository($this->getEntityClass())->createQueryBuilder('e');
-
-		// we need to use a reference to allow adding a filter inside another filter
-		foreach ($this->filter as &$modifier) {
-			$modifier($qb);
-		}
-
-		//orById
-		if ($this->orByIdFilter && $qb->getDQLPart('where')) {
-			$qb->orWhere('e.id IN (:orByIdFilter)')
-				->setParameter('orByIdFilter', $this->orByIdFilter);
-		}
-
-		//byId
-		if ($this->byIdFilter !== null) {
-			$qb->andWhere('e.id IN (:byIdFilter)')
-				->setParameter('byIdFilter', $this->byIdFilter);
-		}
-
-		return $qb;
+		$this->postFetch[] = $fieldName;
+		return $this;
 	}
 }

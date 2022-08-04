@@ -2,8 +2,10 @@
 
 namespace ADT\DoctrineComponents;
 
+use ArrayIterator;
 use Doctrine\ORM\NonUniqueResultException;
 use Doctrine\ORM\NoResultException;
+use Exception;
 use IteratorAggregate;
 use Nette\Utils\Paginator;
 use Traversable;
@@ -25,6 +27,10 @@ class ResultSet implements IteratorAggregate
 		$this->itemsPerPage = $itemsPerPage;
 	}
 
+	/**
+	 * @throws NonUniqueResultException
+	 * @throws NoResultException
+	 */
 	public function getPaginator(): Paginator
 	{
 		if ($this->paginator) {
@@ -55,7 +61,7 @@ class ResultSet implements IteratorAggregate
 	}
 
 	/**
-	 * @throws \Exception
+	 * @throws Exception
 	 */
 	public function getIterator(): Traversable
 	{
@@ -63,7 +69,7 @@ class ResultSet implements IteratorAggregate
 			return $this->results;
 		}
 
-		$this->results = new \ArrayIterator(
+		$this->results = new ArrayIterator(
 			$this->qo->getQuery()
 				->setMaxResults($this->itemsPerPage)
 				->setFirstResult($this->itemsPerPage * ($this->page - 1))
