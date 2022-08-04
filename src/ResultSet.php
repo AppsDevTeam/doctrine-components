@@ -44,6 +44,11 @@ class ResultSet implements IteratorAggregate
 		$paginator->setPage($this->page);
 		$paginator->setItemsPerPage($this->itemsPerPage);
 
+		if ($paginator->getPage() !== $this->page)
+		{
+			throw new PageIsOutOfRangeException('Page number is out of range. Page number '.$this->page . ' is not in the range ('.$paginator->getFirstPage().', '.$paginator->getLastPage().')');
+		}
+
 		return $this->paginator = $paginator;
 	}
 
