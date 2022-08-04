@@ -56,9 +56,9 @@ class ProfileQueryObject extends QueryObject implements FetchInterface
 		return $this;
 	}
 	
-	public function search(string $value): static
+	public function byQuery(string $query): static
 	{
-		$this->by(['identity.firstName', 'identity.lastName', 'identity.email', 'identity.phone'], $value);
+		$this->by(['identity.firstName', 'identity.lastName', 'identity.email', 'identity.phone'], $query);
 
 		return $this;
 	}
@@ -219,7 +219,7 @@ $profiles = $profileResultSet->getIterator();
 $paginator = $profileResultSet->getPaginator();
 
 // returns total count of profiles
-$numberOfProfile = $profileResultSet->count();
+$numberOfProfiles = $profileResultSet->count();
 ````
 
 ## Advanced features
@@ -245,7 +245,7 @@ public function byShowOnWeb(): static
 }
 ```
 
-Unlike `QueryBuilder::innerJoin` and `QueryBuilder::leftJoin`, this ensures that same joins are not used multiple times.
+Unlike `QueryBuilder::innerJoin` and `QueryBuilder::leftJoin`, this ensures that same joins are not used multiple times and don't throw an error.
 
 ### More columns
 
@@ -367,6 +367,6 @@ You should always use new `EntityManager` instance, not the default one (because
 
 - Parameters in `andWhere` method should by named by method name and parametr name to avoid collision.
 
-- Methods `by` and `orderBy` are public methods, but it's always better to create own `by*` or `orderBy` method.
+- Methods `by` and `orderBy` are public methods, but it's always better to create own `by*` or `orderBy*` methods.
 
 - You should always specify a deterministic order, ideally with usage of primary key.
