@@ -129,7 +129,6 @@ abstract class QueryObject implements QueryObjectInterface
 
 	/**
 	 * @param int|int[]|IEntity|IEntity[] $id
-	 * @return static
 	 */
 	final public function orById($id): static
 	{
@@ -153,11 +152,20 @@ abstract class QueryObject implements QueryObjectInterface
 		return $this;
 	}
 
-	final public function disableFilter(array|string $filter)
+	final public function disableFilter(array|string $filter): static
 	{
 		foreach ((array) $filter as $_filter) {
 			unset($this->filter[$_filter]);
 		}
+		
+		return $this;
+	}
+
+	final public function disableDefaultOrder(): static
+	{
+		$this->order = null;
+		
+		return $this;
 	}
 
 	/**
