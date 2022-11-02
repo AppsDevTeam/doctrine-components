@@ -528,7 +528,7 @@ abstract class QueryObject implements QueryObjectInterface
 	{
 		$qb = $this->createQueryBuilder(false);
 
-		$qb->select('COUNT(e.id)');
+		$qb->select('COUNT(' . $this->getCountExpr() . ')');
 
 		if ($qb->getDQLPart('groupBy')) {
 			$paginator = new Doctrine\ORM\Tools\Pagination\Paginator($qb);
@@ -538,6 +538,11 @@ abstract class QueryObject implements QueryObjectInterface
 		$query = $this->getQuery($qb);
 
 		return (int) $query->getSingleScalarResult();
+	}
+	
+	protected function getCountExpr(): string
+	{
+		return $this->entityAlias . '.id';
 	}
 
 	final public function getResultSet(int $page, int $itemsPerPage): ResultSet
