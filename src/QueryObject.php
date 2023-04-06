@@ -177,7 +177,7 @@ abstract class QueryObject implements QueryObjectInterface
 	 * @param bool $strict
 	 * @return $this
 	 */
-	final public function by(array|string $column, mixed $value, bool $strict = false): static
+	final public function by(array|string $column, mixed $value, bool $strict = true): static
 	{
 		$this->filter[] = function (QueryBuilder $qb) use ($column, $value, $strict) {
 			$column = (array) $column;
