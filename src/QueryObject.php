@@ -399,7 +399,7 @@ abstract class QueryObject implements QueryObjectInterface
 	 * @throws ReflectionException
 	 * @throws Exception
 	 */
-	final public function fetch(?int $limit = null): array
+	final public function fetch(?int $limit = null, ?int $offset = null): array
 	{
 		$qb = $this->createQueryBuilder();
 
@@ -411,6 +411,10 @@ abstract class QueryObject implements QueryObjectInterface
 
 		if ($limit) {
 			$query->setMaxResults($limit);
+		}
+
+		if ($offset) {
+			$query->setFirstResult($offset);
 		}
 
 		$result = $query->getResult();
