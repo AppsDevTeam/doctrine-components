@@ -13,6 +13,7 @@ enum QueryObjectByMode: string
 	case IS_EMPTY = 'isEmpty';
 	case IS_NOT_EMPTY = 'isNotEmpty';
 	case IN_ARRAY = 'isInArray';
+	case NOT_IN_ARRAY = 'isNotInArray';
 	case GREATER = 'greater';
 	case GREATER_OR_EQUAL = 'greaterOrEqual';
 	case LESS = 'less';

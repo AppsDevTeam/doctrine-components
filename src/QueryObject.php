@@ -200,9 +200,7 @@ abstract class QueryObject implements QueryObjectInterface
 
 					if (is_null($value)) {
 						$mode = QueryObjectByMode::IS_EMPTY;
-					}
-
-					if (is_array($value) && $mode === QueryObjectByMode::STRICT) {
+					} else if (is_array($value) && $mode === QueryObjectByMode::STRICT) {
 						$mode = QueryObjectByMode::IN_ARRAY;
 					}
 
@@ -251,6 +249,10 @@ abstract class QueryObject implements QueryObjectInterface
 
 						case QueryObjectByMode::IN_ARRAY:
 							$condition = "$_column IN (:$paramName)";
+							break;
+
+						case QueryObjectByMode::NOT_IN_ARRAY:
+							$condition = "$_column NOT IN (:$paramName)";
 							break;
 
 						case QueryObjectByMode::GREATER:
