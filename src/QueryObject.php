@@ -96,7 +96,7 @@ abstract class QueryObject implements QueryObjectInterface
 	 * @param int|int[]|IEntity|IEntity[]|[]|null $id
 	 * @return static
 	 */
-	final public function byId($id): static
+	public function byId($id): static
 	{
 		if (is_iterable($id) && !is_string($id)) {
 			foreach ($id as $item) {
