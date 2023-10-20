@@ -170,16 +170,16 @@ abstract class QueryObject implements QueryObjectInterface
 
 	/**
 	 * Obecná metoda na vyhledávání ve více sloupcích (spojení přes OR).
-	 * Podle vyhledávané hodnoty, případně parametru strict (LIKE vs. =), se zvolí typ vyhledávání (IN, LIKE, =).
+	 * Operátor lze měnit pomocí QueryObjectByMode $mode, výchozí je STRICT (equal)
 	 *
 	 * @param string|string[] $column
 	 * @param mixed $value
-	 * @param bool $strict
+	 * @param QueryObjectByMode $mode
 	 * @return $this
 	 */
-	final public function by(array|string $column, mixed $value, bool $strict = true): static
+	final public function by(array|string $column, mixed $value, QueryObjectByMode $mode = QueryObjectByMode::STRICT): static
 	{
-		$this->filter[] = function (QueryBuilder $qb) use ($column, $value, $strict) {
+		$this->filter[] = function (QueryBuilder $qb) use ($column, $value, $mode) {
 			$column = (array) $column;
 
 			$this->validateFieldNames($column);
@@ -187,23 +187,112 @@ abstract class QueryObject implements QueryObjectInterface
 			$this->addJoins($qb, $column);
 
 			$x = array_map(
-				function($_column) use ($qb, $value, $strict) {
+				function($_column) use ($qb, $value, $mode) {
 					$paramName = 'by_' . str_replace('.', '_', $_column);
+
+					// Pro between chceme rozdelit value do dvou různých podmínek
+					if ($mode === QueryObjectByMode::BETWEEN || $mode === QueryObjectByMode::NOT_BETWEEN) {
+						$paramName2 = 'by_' . str_replace('.', '_', $_column) . '_2';
+					}
+
 					$_column = $this->addColumnPrefix($_column);
 					$_column = $this->getJoinedEntityColumnName($_column);
 
-					if (is_array($value)) {
-						$condition = "$_column IN (:$paramName)";
-						$qb->setParameter($paramName, $value);
-					} else if (is_string($value) && !$strict) {
-						$condition = "$_column LIKE :$paramName";
-						$qb->setParameter($paramName, "%$value%");
-					} else if (is_null($value)) {
-						$condition = "$_column IS NULL";
+					if (is_null($value)) {
+						$mode = QueryObjectByMode::IS_EMPTY;
+					} else if (is_array($value) && $mode === QueryObjectByMode::STRICT) {
+						$mode = QueryObjectByMode::IN_ARRAY;
+					}
+
+					$condition = "$_column = :$paramName";
+
+					switch ($mode) {
+						case QueryObjectByMode::STRICT:
+							$value = "$value";
+							$condition = "$_column = :$paramName";
+							break;
+
+						case QueryObjectByMode::NOT_EQUAL:
+							$value = "$value";
+							$condition = "$_column != :$paramName";
+							break;
+
+						case QueryObjectByMode::STARTS_WITH:
+							$value = "$value%";
+							$condition = "$_column LIKE :$paramName";
+							break;
+
+						case QueryObjectByMode::ENDS_WITH:
+							$value = "%$value";
+							$condition = "$_column LIKE :$paramName";
+							break;
+
+						case QueryObjectByMode::CONTAINS:
+							$value = "%$value%";
+							$condition = "$_column LIKE :$paramName";
+							break;
+
+						case QueryObjectByMode::NOT_CONTAINS:
+							$value = "%$value%";
+							$condition = "$_column NOT LIKE :$paramName";
+							break;
+
+						case QueryObjectByMode::IS_EMPTY:
+							$value = null;
+							$condition = "$_column IS NULL";
+							break;
+
+						case QueryObjectByMode::IS_NOT_EMPTY:
+							$value = null;
+							$condition = "$_column IS NOT NULL";
+							break;
+
+						case QueryObjectByMode::IN_ARRAY:
+							$condition = "$_column IN (:$paramName)";
+							break;
+
+						case QueryObjectByMode::NOT_IN_ARRAY:
+							$condition = "$_column NOT IN (:$paramName)";
+							break;
+
+						case QueryObjectByMode::GREATER:
+							$value = "$value";
+							$condition = "$_column > :$paramName";
+							break;
+
+						case QueryObjectByMode::GREATER_OR_EQUAL:
+							$value = "$value";
+							$condition = "$_column >= :$paramName";
+							break;
+
+						case QueryObjectByMode::LESS:
+							$value = "$value";
+							$condition = "$_column < :$paramName";
+							break;
+
+						case QueryObjectByMode::LESS_OR_EQUAL:
+							$value = "$value";
+							$condition = "$_column <= :$paramName";
+							break;
+
+						case QueryObjectByMode::BETWEEN:
+							$condition = "$_column BETWEEN :$paramName AND :$paramName2";
+							break;
+
+						case QueryObjectByMode::NOT_BETWEEN:
+							$condition = "$_column NOT BETWEEN :$paramName AND :$paramName2";
+							break;
+					}
+
+					if ($mode === QueryObjectByMode::BETWEEN || $mode === QueryObjectByMode::NOT_BETWEEN) {
+						$qb->setParameter($paramName, $value[0]);
+						$qb->setParameter($paramName2, $value[1]);
 					} else {
-						$condition = "$_column = :$paramName";
 						$qb->setParameter($paramName, $value);
 					}
+
+
+
 					return $condition;
 				},
 				$column

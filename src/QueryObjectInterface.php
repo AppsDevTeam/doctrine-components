@@ -4,7 +4,7 @@ namespace ADT\DoctrineComponents;
 
 interface QueryObjectInterface
 {
-	public function by(array|string $column, mixed $value, bool $strict = false): static;
+	public function by(array|string $column, mixed $value, QueryObjectByMode $mode = QueryObjectByMode::STRICT): static;
 	public function orderBy(array|string $field, ?string $order = null): static;
 
 	public function fetch(?int $limit = null): array;
