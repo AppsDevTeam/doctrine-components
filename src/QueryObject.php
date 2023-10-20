@@ -287,11 +287,9 @@ abstract class QueryObject implements QueryObjectInterface
 					if ($mode === QueryObjectByMode::BETWEEN || $mode === QueryObjectByMode::NOT_BETWEEN) {
 						$qb->setParameter($paramName, $value[0]);
 						$qb->setParameter($paramName2, $value[1]);
-					} else {
+					} else if (!is_null($value)) {
 						$qb->setParameter($paramName, $value);
 					}
-
-
 
 					return $condition;
 				},
