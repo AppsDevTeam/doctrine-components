@@ -208,12 +208,10 @@ abstract class QueryObject implements QueryObjectInterface
 
 					switch ($mode) {
 						case QueryObjectByMode::STRICT:
-							$value = $value;
 							$condition = "$_column = :$paramName";
 							break;
 
 						case QueryObjectByMode::NOT_EQUAL:
-							$value = $value;
 							$condition = "$_column != :$paramName";
 							break;
 
@@ -256,22 +254,18 @@ abstract class QueryObject implements QueryObjectInterface
 							break;
 
 						case QueryObjectByMode::GREATER:
-							$value = "$value";
 							$condition = "$_column > :$paramName";
 							break;
 
 						case QueryObjectByMode::GREATER_OR_EQUAL:
-							$value = "$value";
 							$condition = "$_column >= :$paramName";
 							break;
 
 						case QueryObjectByMode::LESS:
-							$value = "$value";
 							$condition = "$_column < :$paramName";
 							break;
 
 						case QueryObjectByMode::LESS_OR_EQUAL:
-							$value = "$value";
 							$condition = "$_column <= :$paramName";
 							break;
 
@@ -287,11 +281,9 @@ abstract class QueryObject implements QueryObjectInterface
 					if ($mode === QueryObjectByMode::BETWEEN || $mode === QueryObjectByMode::NOT_BETWEEN) {
 						$qb->setParameter($paramName, $value[0]);
 						$qb->setParameter($paramName2, $value[1]);
-					} else {
+					} else if (!is_null($value)) {
 						$qb->setParameter($paramName, $value);
 					}
-
-
 
 					return $condition;
 				},
