@@ -480,7 +480,7 @@ abstract class QueryObject implements QueryObjectInterface
 	 * @throws ReflectionException
 	 * @throws Exception
 	 */
-	final public function fetch(?int $limit = null, ?int $offset = null): array
+	final public function fetch(?int $limit = null, ?int $offset = null, bool $lock = false): array
 	{
 		$qb = $this->createQueryBuilder();
 
@@ -496,6 +496,10 @@ abstract class QueryObject implements QueryObjectInterface
 
 		if ($offset) {
 			$query->setFirstResult($offset);
+		}
+
+		if ($lock) {
+			$query->setLockMode(LockMode::PESSIMISTIC_WRITE);
 		}
 
 		$result = $query->getResult();
@@ -526,9 +530,9 @@ abstract class QueryObject implements QueryObjectInterface
 	 * @throws NonUniqueResultException
 	 * @throws ReflectionException
 	 */
-	final public function fetchOne(bool $strict = true): object
+	final public function fetchOne(bool $strict = true, bool $lock = false): object
 	{
-		$result = $this->fetch(2);
+		$result = $this->fetch(2, $lock);
 
 		if (!$result) {
 			throw new NoResultException();
@@ -548,10 +552,10 @@ abstract class QueryObject implements QueryObjectInterface
 	 * @throws NonUniqueResultException
 	 * @throws ReflectionException
 	 */
-	final public function fetchOneOrNull(bool $strict = true): object|null
+	final public function fetchOneOrNull(bool $strict = true, bool $lock = false): object|null
 	{
 		try {
-			return $this->fetchOne($strict);
+			return $this->fetchOne($strict, $lock);
 		} catch (NoResultException) {
 			return null;
 		}
