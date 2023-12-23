@@ -532,7 +532,7 @@ abstract class QueryObject implements QueryObjectInterface
 	 */
 	final public function fetchOne(bool $strict = true, bool $lock = false): object
 	{
-		$result = $this->fetch(2, $lock);
+		$result = $this->fetch(2, null, $lock);
 
 		if (!$result) {
 			throw new NoResultException();
