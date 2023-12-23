@@ -499,7 +499,7 @@ abstract class QueryObject implements QueryObjectInterface
 		}
 
 		if ($lock) {
-			$query->setLockMode(LockMode::PESSIMISTIC_WRITE);
+			$query->setLockMode(Doctrine\DBAL\LockMode::PESSIMISTIC_WRITE);
 		}
 
 		$result = $query->getResult();
