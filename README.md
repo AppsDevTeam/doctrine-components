@@ -1,4 +1,4 @@
-# Query Object
+# Doctrine Components
 
 ## Install
 
