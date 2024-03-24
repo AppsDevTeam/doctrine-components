@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace ADT\DoctrineComponents;
 
 use Doctrine\Common\EventSubscriber;
+use Doctrine\ORM\Decorator\EntityManagerDecorator;
 use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Event\PostPersistEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
@@ -16,7 +17,7 @@ abstract class BaseListener implements EventSubscriber
 	private static int $transactionsStartedCount = 0;
 	private static bool $possibleChangesChecked = false;
 
-	protected EntityManager $em;
+	protected EntityManagerDecorator $em;
 
 	/** @var callable[] */
 	protected array $postFlush = [];
@@ -29,7 +30,7 @@ abstract class BaseListener implements EventSubscriber
 
 	public abstract function getSubscribedEvents();
 
-	public function __construct(EntityManager $em)
+	public function setEntityManager(EntityManagerDecorator $em)
 	{
 		$this->em = $em;
 	}
@@ -114,9 +115,9 @@ abstract class BaseListener implements EventSubscriber
 			foreach (array_merge($uow->getScheduledEntityInsertions(), $uow->getScheduledEntityUpdates()) as $_entity) {
 				$changedEntities[] = $_entity::class . ' ' . $_entity->getId();
 			}
-		if (count($changedEntities) > 0) {
-			throw new Exception('You probably did not recompute all changes:' . implode('; ', $changedEntities));
-		}
+			if (count($changedEntities) > 0) {
+				throw new Exception('You probably did not recompute all changes:' . implode('; ', $changedEntities));
+			}
 			self::$possibleChangesChecked = true;
 		}
 
