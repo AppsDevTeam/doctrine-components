@@ -20,7 +20,7 @@ abstract class BaseListener implements EventSubscriber
 	protected EntityManagerDecorator $em;
 
 	/** @var callable[] */
-	protected array $postFlush = [];
+	private array $postFlush = [];
 
 	/** @var callable[] */
 	protected array $entitiesToCompute = [];
@@ -169,5 +169,14 @@ abstract class BaseListener implements EventSubscriber
 		foreach ($uniqueEntitiesToRecalculate as $_entity) {
 			$this->em->getUnitOfWork()->recomputeSingleEntityChangeSet($this->em->getClassMetadata($_entity::class), $_entity);
 		}
+	}
+
+	final protected function addPostFlushCallback(callable $callback): void
+	{
+		if (!isset($this->getSubscribedEvents()['postFlush'])) {
+			throw new \Exception ('Missing postFlush subsribed event.');
+		}
+
+		$this->postFlush[] = $callback;
 	}
 }
