@@ -173,7 +173,7 @@ abstract class BaseListener implements EventSubscriber
 
 	final protected function addPostFlushCallback(callable $callback): void
 	{
-		if (!isset($this->getSubscribedEvents()['postFlush'])) {
+		if (!in_array('postFlush', $this->getSubscribedEvents())) {
 			throw new \Exception ('Missing postFlush subsribed event.');
 		}
 
