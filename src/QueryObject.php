@@ -276,6 +276,10 @@ abstract class QueryObject implements QueryObjectInterface
 						case QueryObjectByMode::NOT_BETWEEN:
 							$condition = "$_column NOT BETWEEN :$paramName AND :$paramName2";
 							break;
+
+						case QueryObjectByMode::MEMBER_OF:
+							$condition = ":$paramName MEMBER OF $_column";
+							break;
 					}
 
 					if ($mode === QueryObjectByMode::BETWEEN || $mode === QueryObjectByMode::NOT_BETWEEN) {

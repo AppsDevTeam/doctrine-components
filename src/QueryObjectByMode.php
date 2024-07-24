@@ -20,4 +20,5 @@ enum QueryObjectByMode: string
 	case LESS_OR_EQUAL = 'lessOrEqual';
 	case BETWEEN = 'between';
 	case NOT_BETWEEN = 'notBetween';
+	case MEMBER_OF = 'memberOf';
 }
