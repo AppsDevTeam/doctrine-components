@@ -157,14 +157,14 @@ abstract class QueryObject implements QueryObjectInterface
 		foreach ((array) $filter as $_filter) {
 			unset($this->filter[$_filter]);
 		}
-		
+
 		return $this;
 	}
 
 	final public function disableDefaultOrder(): static
 	{
 		$this->order = null;
-		
+
 		return $this;
 	}
 
@@ -428,9 +428,10 @@ abstract class QueryObject implements QueryObjectInterface
 			$aliasLast = null;
 			foreach (explode('.', $column, '-1') as $aliasNew) {
 				$join = $aliasLast ? $aliasLast . '.' . $aliasNew : $this->addColumnPrefix($aliasNew);
-				$filterKey = $this->getJoinFilterKey($joinType, $join, $aliasNew);
+				$filterKey = $this->getJoinFilterKey($join, $aliasNew);
 				if (!$this->isAlreadyJoined($filterKey)) {
-					$this->commonJoin($qb, $joinType, $join, $aliasNew);
+					// because order is a reserved word
+					$this->commonJoin($qb, $joinType, $join, $aliasNew === 'order' ? 'o' : $aliasNew);
 				}
 				$aliasLast = $aliasNew;
 			}
@@ -632,7 +633,7 @@ abstract class QueryObject implements QueryObjectInterface
 
 		return (int) $query->getSingleScalarResult();
 	}
-	
+
 	protected function getCountExpr(): string
 	{
 		return $this->entityAlias . '.id';
