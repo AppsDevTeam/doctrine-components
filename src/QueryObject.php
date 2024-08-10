@@ -431,7 +431,7 @@ abstract class QueryObject implements QueryObjectInterface
 				$filterKey = $this->getJoinFilterKey($join, $aliasNew);
 				if (!$this->isAlreadyJoined($filterKey)) {
 					// because order is a reserved word
-					$this->commonJoin($qb, $joinType, $join, $aliasNew === 'order' ? 'o' : $aliasNew);
+					$this->commonJoin($qb, $joinType, $join, $aliasNew);
 				}
 				$aliasLast = $aliasNew;
 			}
