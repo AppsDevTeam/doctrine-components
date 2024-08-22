@@ -67,6 +67,11 @@ abstract class QueryObject implements QueryObjectInterface
 		$this->setDefaultOrder();
 	}
 
+	public function getDTOClass(): ?string
+	{
+		return null;
+	}
+
 	final public function getEntityManager(): ?EntityManagerInterface
 	{
 		return $this->em;
@@ -508,8 +513,16 @@ abstract class QueryObject implements QueryObjectInterface
 		}
 
 		$result = $query->getResult();
-
-		$this->postFetch(new ArrayIterator($result));
+		if ($this->getDTOClass()) {
+			$results = $result;
+			$result = [];
+			foreach ($results as $_result) {
+				$_dtoClass = $this->getDTOClass();
+				$result[] = new $_dtoClass($_result);
+			}
+		} else {
+			$this->postFetch(new ArrayIterator($result));
+		}
 
 		return $result;
 	}
