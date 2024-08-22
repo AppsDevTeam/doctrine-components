@@ -494,8 +494,8 @@ abstract class QueryObject implements QueryObjectInterface
 	{
 		$qb = $this->createQueryBuilder();
 
-		if ($this->hasModifiedColumns($qb)) {
-			throw new Exception('Cannot call ' . __METHOD__ . ' on a query object with modified columns.');
+		if ($this->hasModifiedColumns($qb) && !$this->getDTOClass()) {
+			throw new Exception('Cannot call ' . __METHOD__ . ' on a query object with modified columns AND without getDTOClass set.');
 		}
 
 		$query = $this->getQuery($qb);
