@@ -337,6 +337,27 @@ abstract class QueryObject implements QueryObjectInterface
 		return $this;
 	}
 
+	private function mapToDTO($data): array
+	{
+		$dtoClass = $this->getDTOClass();
+		$reflectionClass = new ReflectionClass($dtoClass);
+		$result = [];
+		foreach ($data as $_row) {
+			$_dto = new $dtoClass($_row);
+			foreach ($_row as $_property => $_value) {
+				if ($reflectionClass->hasProperty($_property)) {
+					$prop = $reflectionClass->getProperty($_property);
+					$prop->setAccessible(true);
+					$prop->setValue($_dto, $_value);
+				} else {
+					throw new \Exception('Property ' . $dtoClass . '::' . $_property . ' does not exist.');
+				}
+			}
+			$result[] = $_dto;
+		}
+		return $result;
+	}
+
 	/** @internal */
 	final protected function validateFieldNames(array $fields): void
 	{
@@ -494,9 +515,9 @@ abstract class QueryObject implements QueryObjectInterface
 	{
 		$qb = $this->createQueryBuilder();
 
-		if ($this->hasModifiedColumns($qb) && !$this->getDTOClass()) {
-			throw new Exception('Cannot call ' . __METHOD__ . ' on a query object with modified columns AND without getDTOClass set.');
-		}
+//		if ($this->hasModifiedColumns($qb) && !$this->getDTOClass()) {
+//			throw new Exception('You have to set DTO class ' . __METHOD__ . ' on a query object with custom select.');
+//		}
 
 		$query = $this->getQuery($qb);
 
@@ -514,12 +535,7 @@ abstract class QueryObject implements QueryObjectInterface
 
 		$result = $query->getResult();
 		if ($this->getDTOClass()) {
-			$results = $result;
-			$result = [];
-			foreach ($results as $_result) {
-				$_dtoClass = $this->getDTOClass();
-				$result[] = new $_dtoClass($_result);
-			}
+			$result = $this->mapToDTO($result);
 		} else {
 			$this->postFetch(new ArrayIterator($result));
 		}
