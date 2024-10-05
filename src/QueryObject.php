@@ -494,7 +494,7 @@ abstract class QueryObject implements QueryObjectInterface
 
 	private function getJoinFilterKey(string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): string
 	{
-		return implode('_', [$join, $alias, $conditionType, $condition, $indexBy]);
+		return implode('_', [$alias]);
 	}
 
 	private function isAlreadyJoined(string $filterKey): bool
