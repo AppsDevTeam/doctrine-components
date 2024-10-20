@@ -193,8 +193,15 @@ abstract class QueryObject implements QueryObjectInterface
 
 			$x = array_map(
 				function($_column) use ($qb, $value, $mode) {
-					$paramName = 'by_' . str_replace('.', '_', $_column);
+					if ($mode === QueryObjectByMode::BETWEEN && is_null($value[0])) {
+						$mode = QueryObjectByMode::LESS_OR_EQUAL;
+						$value = $value[1];
+					} elseif ($mode === QueryObjectByMode::BETWEEN && is_null($value[1])) {
+						$mode = QueryObjectByMode::GREATER_OR_EQUAL;
+						$value = $value[0];
+					}
 
+					$paramName = 'by_' . str_replace('.', '_', $_column);
 					// Pro between chceme rozdelit value do dvou různých podmínek
 					if ($mode === QueryObjectByMode::BETWEEN || $mode === QueryObjectByMode::NOT_BETWEEN) {
 						$paramName2 = 'by_' . str_replace('.', '_', $_column) . '_2';
