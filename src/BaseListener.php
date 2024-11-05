@@ -121,7 +121,7 @@ abstract class BaseListener implements EventSubscriber
 			self::$possibleChangesChecked = true;
 		}
 
-		if (self::$transactionsStartedCount) {
+		while (self::$transactionsStartedCount) {
 			$this->commitTransaction();
 		}
 		$postFlush = $this->postFlush;
