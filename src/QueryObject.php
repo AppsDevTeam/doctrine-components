@@ -716,6 +716,11 @@ abstract class QueryObject implements QueryObjectInterface
 		$childrenFieldNames = []; // fieldName => childrenFieldNames
 
 		foreach ($fieldNames as $fieldName) {
+			if (is_callable($fieldName)) {
+				$fieldName($em, $rootEntities);
+				continue;
+			}
+
 			if (!Strings::contains($fieldName, '.')) {
 				// fetch jen pro toto pole
 				$currentFieldNames[] = $fieldName;
@@ -953,10 +958,10 @@ abstract class QueryObject implements QueryObjectInterface
 
 	/**
 	 * Přidá pole do seznamu pro postFetch.
-	 * @param string $fieldName Může být název pole (např. "contact") nebo cesta (např. "commission.contract.client").
+	 * @param string|callable $fieldName Může být název pole (např. "contact") nebo cesta (např. "commission.contract.client").
 	 * @return $this
 	 */
-	final public function addPostFetch(string $fieldName): static
+	final public function addPostFetch(string|callable $fieldName): static
 	{
 		$this->postFetch[] = $fieldName;
 		return $this;
