@@ -4,7 +4,6 @@ declare(strict_types=1);
 namespace ADT\DoctrineComponents;
 
 use Doctrine\Common\EventSubscriber;
-use Doctrine\ORM\Decorator\EntityManagerDecorator;
 use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Event\PostPersistEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
@@ -17,7 +16,7 @@ abstract class BaseListener implements EventSubscriber
 	private static int $transactionsStartedCount = 0;
 	private static bool $possibleChangesChecked = false;
 
-	protected EntityManagerDecorator $em;
+	protected EntityManager $em;
 
 	/** @var callable[] */
 	private array $postFlush = [];
@@ -30,11 +29,14 @@ abstract class BaseListener implements EventSubscriber
 
 	public abstract function getSubscribedEvents();
 
-	public function setEntityManager(EntityManagerDecorator $em)
+	public function setEntityManager(EntityManager $em): void
 	{
 		$this->em = $em;
 	}
 
+	/**
+	 * @throws Exception
+	 */
 	final public function onFlush(OnFlushEventArgs $eventArgs): void
 	{
 		self::$possibleChangesChecked = false;
@@ -49,6 +51,9 @@ abstract class BaseListener implements EventSubscriber
 		$this->recalculateEntities();
 	}
 
+	/**
+	 * @throws Exception
+	 */
 	final public function prePersist(PrePersistEventArgs $eventArgs): void
 	{
 		self::$possibleChangesChecked = false;
@@ -63,6 +68,9 @@ abstract class BaseListener implements EventSubscriber
 		$this->recalculateEntities();
 	}
 
+	/**
+	 * @throws Exception
+	 */
 	final public function postPersist(PostPersistEventArgs $eventArgs): void
 	{
 		self::$possibleChangesChecked = false;
@@ -77,6 +85,9 @@ abstract class BaseListener implements EventSubscriber
 		$this->recalculateEntities();
 	}
 
+	/**
+	 * @throws Exception
+	 */
 	final public function preUpdate(PreUpdateEventArgs $eventArgs): void
 	{
 		self::$possibleChangesChecked = false;
@@ -91,6 +102,9 @@ abstract class BaseListener implements EventSubscriber
 		$this->recalculateEntities();
 	}
 
+	/**
+	 * @throws Exception
+	 */
 	final public function postUpdate(PostUpdateEventArgs $eventArgs): void
 	{
 		self::$possibleChangesChecked = false;
@@ -105,6 +119,9 @@ abstract class BaseListener implements EventSubscriber
 		$this->recalculateEntities();
 	}
 
+	/**
+	 * @throws Exception
+	 */
 	final public function postFlush(): void
 	{
 		$uow = $this->em->getUnitOfWork();
@@ -139,6 +156,9 @@ abstract class BaseListener implements EventSubscriber
 		self::$transactionsStartedCount++;
 	}
 
+	/**
+	 * @throws Exception
+	 */
 	protected function commitTransaction(): void
 	{
 		self::$transactionsStartedCount--;
@@ -171,10 +191,13 @@ abstract class BaseListener implements EventSubscriber
 		}
 	}
 
+	/**
+	 * @throws Exception
+	 */
 	final protected function addPostFlushCallback(callable $callback): void
 	{
 		if (!in_array('postFlush', $this->getSubscribedEvents())) {
-			throw new \Exception ('Missing postFlush subsribed event.');
+			throw new Exception ('Missing postFlush subsribed event.');
 		}
 
 		$this->postFlush[] = $callback;

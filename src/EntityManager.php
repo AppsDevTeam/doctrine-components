@@ -5,15 +5,19 @@ declare(strict_types=1);
 namespace ADT\DoctrineComponents;
 
 use Doctrine\ORM\Decorator\EntityManagerDecorator;
+use Exception;
 
 class EntityManager extends EntityManagerDecorator
 {
 	public static bool $isFlushAllowed = true;
 
+	/**
+	 * @throws Exception
+	 */
 	public function flush(): void
 	{
 		if (!self::$isFlushAllowed) {
-			throw new \Exception('You cannot use flush.');
+			throw new Exception('You cannot use flush.');
 		}
 
 		// we wrap it into transaction because in onFlush event we can add something to background queue

@@ -321,7 +321,7 @@ abstract class QueryObject implements QueryObjectInterface
 			if (is_string($field)) {
 				$field = [$field => $order];
 			} elseif ($order) {
-				throw new \Exception ('Do not specify "$order" if "$field" is an array.');
+				throw new Exception ('Do not specify "$order" if "$field" is an array.');
 			}
 
 			if (empty($field)) {
@@ -357,7 +357,7 @@ abstract class QueryObject implements QueryObjectInterface
 					$prop->setAccessible(true);
 					$prop->setValue($_dto, $_value);
 				} else {
-					throw new \Exception('Property ' . $dtoClass . '::' . $_property . ' does not exist.');
+					throw new Exception('Property ' . $dtoClass . '::' . $_property . ' does not exist.');
 				}
 			}
 			$result[] = $_dto;
@@ -370,7 +370,7 @@ abstract class QueryObject implements QueryObjectInterface
 	{
 		foreach ($fields as $_name => $_order) {
 			if (explode('.', $_name)[0] === $this->entityAlias) {
-				throw new \Exception('Do not use entity alias in field names.');
+				throw new Exception('Do not use entity alias in field names.');
 			}
 		}
 	}

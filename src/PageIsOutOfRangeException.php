@@ -1,8 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace ADT\DoctrineComponents;
 
-class PageIsOutOfRangeException extends \Exception
+use Exception;
+
+class PageIsOutOfRangeException extends Exception
 {
 
 }

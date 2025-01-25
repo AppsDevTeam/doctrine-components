@@ -30,6 +30,7 @@ class ResultSet implements IteratorAggregate
 	/**
 	 * @throws NonUniqueResultException
 	 * @throws NoResultException
+	 * @throws PageIsOutOfRangeException
 	 */
 	public function getPaginator(): Paginator
 	{

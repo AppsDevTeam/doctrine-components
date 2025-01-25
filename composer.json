@@ -17,9 +17,12 @@
 		"issues": "https://github.com/AppsDevTeam/base-query/issues"
 	},
 	"require": {
-		"php": ">=8.1",
+		"php": ">=8.2",
 		"doctrine/orm": "^2.18|^3.0",
-		"nette/utils": "^3.2|^4.0"
+		"nette/utils": "^3.2|^4.0",
+		"tracy/tracy": "^2.10",
+		"psr/log": "^3.0",
+		"nettrine/dbal": "^0.10.0"
 	},
 	"autoload": {
 		"psr-4": {
