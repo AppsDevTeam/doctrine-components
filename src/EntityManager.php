@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Model\Doctrine;
+namespace ADT\DoctrineComponents;
 
 use Doctrine\ORM\Decorator\EntityManagerDecorator;
 
