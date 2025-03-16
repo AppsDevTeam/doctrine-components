@@ -384,7 +384,7 @@ abstract class QueryObject implements QueryObjectInterface
 		$query = ($qb ?: $this->createQueryBuilder())->getQuery();
 
 		foreach ($this->hints as $_name => $_value) {
-			$query->setHint($_name, $_value);
+			$query->setHint($_name, is_callable($_value) ? $_value() : $_value);
 		}
 
 		return $query;
