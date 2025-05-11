@@ -175,14 +175,14 @@ abstract class QueryObject implements QueryObjectInterface
 
 	/**
 	 * Obecná metoda na vyhledávání ve více sloupcích (spojení přes OR).
-	 * Operátor lze měnit pomocí QueryObjectByMode $mode, výchozí je STRICT (equal)
+	 * Operátor lze měnit pomocí QueryObjectByMode $mode, výchozí je AUTO (nastaví se nejvhodnější podle typu parametru)
 	 *
 	 * @param string|string[] $column
 	 * @param mixed $value
 	 * @param QueryObjectByMode $mode
 	 * @return $this
 	 */
-	final public function by(array|string $column, mixed $value, QueryObjectByMode $mode = QueryObjectByMode::STRICT): static
+	final public function by(array|string $column, mixed $value = null, QueryObjectByMode $mode = QueryObjectByMode::AUTO): static
 	{
 		$this->filter[] = function (QueryBuilder $qb) use ($column, $value, $mode) {
 			$column = (array) $column;
@@ -199,27 +199,29 @@ abstract class QueryObject implements QueryObjectInterface
 					} elseif ($mode === QueryObjectByMode::BETWEEN && is_null($value[1])) {
 						$mode = QueryObjectByMode::GREATER_OR_EQUAL;
 						$value = $value[0];
+					} elseif ($mode === QueryObjectByMode::AUTO) {
+						if (is_null($value)) {
+							$mode = QueryObjectByMode::IS_NULL;
+						} else if (is_array($value)) {
+							$mode = QueryObjectByMode::IN_ARRAY;
+						} else {
+							$mode = QueryObjectByMode::EQUAL;
+						}
 					}
 
-					$paramName = 'by_' . str_replace('.', '_', $_column);
-					// Pro between chceme rozdelit value do dvou různých podmínek
-					if ($mode === QueryObjectByMode::BETWEEN || $mode === QueryObjectByMode::NOT_BETWEEN) {
-						$paramName2 = 'by_' . str_replace('.', '_', $_column) . '_2';
+					if (!in_array($mode, [QueryObjectByMode::IS_NULL, QueryObjectByMode::IS_NOT_NULL, QueryObjectByMode::IS_EMPTY, QueryObjectByMode::IS_NOT_EMPTY])) {
+						$paramName = 'by_' . str_replace('.', '_', $_column);
+						// Pro between chceme rozdelit value do dvou různých podmínek
+						if (in_array($mode, [QueryObjectByMode::BETWEEN, $mode === QueryObjectByMode::NOT_BETWEEN])) {
+							$paramName2 = 'by_' . str_replace('.', '_', $_column) . '_2';
+						}
 					}
 
 					$_column = $this->addColumnPrefix($_column);
 					$_column = $this->getJoinedEntityColumnName($_column);
 
-					if (is_null($value)) {
-						$mode = QueryObjectByMode::IS_EMPTY;
-					} else if (is_array($value) && $mode === QueryObjectByMode::STRICT) {
-						$mode = QueryObjectByMode::IN_ARRAY;
-					}
-
-					$condition = "$_column = :$paramName";
-
 					switch ($mode) {
-						case QueryObjectByMode::STRICT:
+						case QueryObjectByMode::EQUAL:
 							$condition = "$_column = :$paramName";
 							break;
 
@@ -247,15 +249,15 @@ abstract class QueryObject implements QueryObjectInterface
 							$condition = "$_column NOT LIKE :$paramName";
 							break;
 
-						case QueryObjectByMode::IS_EMPTY:
+						case QueryObjectByMode::IS_NULL:
 							$value = null;
 							$condition = "$_column IS NULL";
 							break;
 
-						case QueryObjectByMode::IS_NOT_EMPTY:
+						case QueryObjectByMode::IS_NOT_NULL:
 							$value = null;
 							$condition = "$_column IS NOT NULL";
-							break;
+							break;	
 
 						case QueryObjectByMode::IN_ARRAY:
 							$condition = "$_column IN (:$paramName)";
@@ -292,12 +294,22 @@ abstract class QueryObject implements QueryObjectInterface
 						case QueryObjectByMode::MEMBER_OF:
 							$condition = ":$paramName MEMBER OF $_column";
 							break;
+
+						case QueryObjectByMode::IS_EMPTY:
+							$value = null;
+							$condition = "$_column IS EMPTY";
+							break;
+
+						case QueryObjectByMode::IS_NOT_EMPTY:
+							$value = null;
+							$condition = "$_column IS NOT EMPTY";
+							break;						
 					}
 
-					if ($mode === QueryObjectByMode::BETWEEN || $mode === QueryObjectByMode::NOT_BETWEEN) {
+					if (isset($paramName2)) {
 						$qb->setParameter($paramName, $value[0]);
 						$qb->setParameter($paramName2, $value[1]);
-					} else if (!is_null($value)) {
+					} elseif (isset($paramName)) {
 						$qb->setParameter($paramName, $value);
 					}
 
