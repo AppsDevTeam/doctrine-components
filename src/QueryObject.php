@@ -205,7 +205,7 @@ abstract class QueryObject implements QueryObjectInterface
 						} else if (is_array($value)) {
 							$mode = QueryObjectByMode::IN_ARRAY;
 						} else {
-							$mode = QueryObjectByMode::EQUAL;
+							$mode = QueryObjectByMode::EQUALS;
 						}
 					}
 
@@ -221,11 +221,11 @@ abstract class QueryObject implements QueryObjectInterface
 					$_column = $this->getJoinedEntityColumnName($_column);
 
 					switch ($mode) {
-						case QueryObjectByMode::EQUAL:
+						case QueryObjectByMode::EQUALS:
 							$condition = "$_column = :$paramName";
 							break;
 
-						case QueryObjectByMode::NOT_EQUAL:
+						case QueryObjectByMode::NOT_EQUALS:
 							$condition = "$_column != :$paramName";
 							break;
 
