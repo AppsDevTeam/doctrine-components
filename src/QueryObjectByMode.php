@@ -5,8 +5,8 @@ namespace ADT\DoctrineComponents;
 enum QueryObjectByMode: string
 {
 	case AUTO = 'auto';
-	case EQUAL = 'equal';
-	case NOT_EQUAL = 'notEqual';
+	case EQUALS = 'equals';
+	case NOT_EQUALS = 'notEquals';
 	case STARTS_WITH = 'startsWith';
 	case ENDS_WITH = 'endsWith';
 	case CONTAINS = 'contains';
