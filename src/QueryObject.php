@@ -295,6 +295,10 @@ abstract class QueryObject implements QueryObjectInterface
 							$condition = ":$paramName MEMBER OF $_column";
 							break;
 
+						case QueryObjectByMode::NOT_MEMBER_OF:
+							$condition = ":$paramName NOT MEMBER OF $_column";
+							break;
+
 						case QueryObjectByMode::IS_EMPTY:
 							$value = null;
 							$condition = "$_column IS EMPTY";

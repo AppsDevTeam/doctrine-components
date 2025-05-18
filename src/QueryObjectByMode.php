@@ -22,6 +22,7 @@ enum QueryObjectByMode: string
 	case BETWEEN = 'between';
 	case NOT_BETWEEN = 'notBetween';
 	case MEMBER_OF = 'memberOf';
+	case NOT_MEMBER_OF = 'notMemberOf';
 	case IS_EMPTY = 'isEmpty';
 	case IS_NOT_EMPTY = 'isNotEmpty';
 }
