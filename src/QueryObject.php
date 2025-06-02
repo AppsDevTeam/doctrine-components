@@ -55,7 +55,7 @@ abstract class QueryObject implements QueryObjectInterface
 	/**
 	 * @throws Exception
 	 */
-	final public function __construct(EntityManagerInterface $em)
+	public function __construct(EntityManagerInterface $em)
 	{
 		$this->em = $em;
 
@@ -257,7 +257,7 @@ abstract class QueryObject implements QueryObjectInterface
 						case QueryObjectByMode::IS_NOT_NULL:
 							$value = null;
 							$condition = "$_column IS NOT NULL";
-							break;	
+							break;
 
 						case QueryObjectByMode::IN_ARRAY:
 							$condition = "$_column IN (:$paramName)";
@@ -307,7 +307,7 @@ abstract class QueryObject implements QueryObjectInterface
 						case QueryObjectByMode::IS_NOT_EMPTY:
 							$value = null;
 							$condition = "$_column IS NOT EMPTY";
-							break;						
+							break;
 					}
 
 					if (isset($paramName2)) {
