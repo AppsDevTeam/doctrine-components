@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ADT\DoctrineComponents;
 
+use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\ORM\Decorator\EntityManagerDecorator;
 use Exception;
 
@@ -26,5 +27,33 @@ class EntityManager extends EntityManagerDecorator
 		$this->beginTransaction();
 		parent::flush();
 		$this->commit();
+	}
+
+	public function isPossibleToDeleteEntity(object $entity): bool
+	{
+		$bool = true;
+		$this->beginTransaction();
+
+		try {
+			$this->lowLevelDelete($entity);
+		} catch (ForeignKeyConstraintViolationException) {
+			$bool = false;
+		}
+
+		$this->rollback();
+
+		return $bool;
+	}
+
+	protected function lowLevelDelete(object $entity): void
+	{
+		$class = get_class($entity);
+		$this->createQueryBuilder()
+			->delete()
+			->from($class, 'e')
+			->andWhere('e = :entity')
+			->setParameter('entity', $entity)
+			->getQuery()
+			->execute();
 	}
 }
