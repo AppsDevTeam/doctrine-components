@@ -53,7 +53,7 @@ abstract class QueryObject implements QueryObjectInterface
 
 	private bool $isInitialized = false;
 
-	abstract protected function getEntityClass(): string;
+	abstract public function getEntityClass(): string;
 	abstract protected function setDefaultOrder(): void;
 
 	/**
