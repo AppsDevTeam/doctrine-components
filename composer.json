@@ -17,7 +17,7 @@
 		"issues": "https://github.com/AppsDevTeam/base-query/issues"
 	},
 	"require": {
-		"php": ">=8.2",
+		"php": ">=8.3",
 		"doctrine/orm": "^2.18|^3.0",
 		"nette/utils": "^3.2|^4.0",
 		"tracy/tracy": "^2.10",

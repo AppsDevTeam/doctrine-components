@@ -1,6 +1,6 @@
 <?php
 
-namespace ADT\DoctrineComponents;
+namespace ADT\DoctrineComponents\QueryObject;
 
 use ArrayIterator;
 use Doctrine\ORM\NonUniqueResultException;
@@ -31,6 +31,7 @@ class ResultSet implements IteratorAggregate
 	 * @throws NonUniqueResultException
 	 * @throws NoResultException
 	 * @throws PageIsOutOfRangeException
+	 * @throws Exception
 	 */
 	public function getPaginator(): Paginator
 	{
@@ -56,6 +57,7 @@ class ResultSet implements IteratorAggregate
 	/**
 	 * @throws NonUniqueResultException
 	 * @throws NoResultException
+	 * @throws Exception
 	 */
 	public function count(): int
 	{

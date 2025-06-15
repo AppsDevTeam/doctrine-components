@@ -1,7 +1,11 @@
 <?php
 
-namespace ADT\DoctrineComponents;
+namespace ADT\DoctrineComponents\QueryObject;
 
+use ADT\DoctrineComponents\IEntity;
+use ADT\DoctrineComponents\QueryObject\QueryObjectByMode;
+use ADT\DoctrineComponents\QueryObject\QueryObjectInterface;
+use ADT\DoctrineComponents\QueryObject\ResultSet;
 use ArrayIterator;
 use Closure;
 use Doctrine;

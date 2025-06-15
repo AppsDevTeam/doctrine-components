@@ -1,6 +1,6 @@
 <?php
 
-namespace ADT\DoctrineComponents;
+namespace ADT\DoctrineComponents\QueryObject;
 
 enum QueryObjectByMode: string
 {
