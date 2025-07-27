@@ -7,6 +7,8 @@ namespace ADT\DoctrineComponents;
 use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\ORM\Decorator\EntityManagerDecorator;
 use Exception;
+use ReflectionClass;
+use ReflectionException;
 
 class EntityManager extends EntityManagerDecorator
 {
@@ -55,5 +57,21 @@ class EntityManager extends EntityManagerDecorator
 			->setParameter('entity', $entity)
 			->getQuery()
 			->execute();
+	}
+
+	/**
+	 * @throws ReflectionException
+	 * @throws Exception
+	 */
+	public function findEntityClassByInterface(string $interfaceName): string
+	{
+		foreach ($this->getMetadataFactory()->getAllMetadata() as $classMetadata) {
+			$className = $classMetadata->getName();
+			if (new ReflectionClass($className)->implementsInterface($interfaceName)) {
+				return $className;
+			}
+		}
+
+		throw new Exception('There is no entity with interface "' . $interfaceName . '".');
 	}
 }
