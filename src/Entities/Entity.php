@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace ADT\DoctrineComponents;
+namespace ADT\DoctrineComponents\Entities;
 
-interface IEntity 
+interface Entity
 {
 	public function getId();
 }
