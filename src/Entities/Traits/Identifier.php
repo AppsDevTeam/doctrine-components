@@ -22,4 +22,9 @@ trait Identifier
 	{
 		$this->id = null;
 	}
+
+	public function isNew(): bool
+	{
+		return !$this->getId();
+	}
 }
