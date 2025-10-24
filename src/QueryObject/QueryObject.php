@@ -10,6 +10,7 @@ use ArrayIterator;
 use Closure;
 use Doctrine;
 use Doctrine\ORM\AbstractQuery;
+use Doctrine\ORM\Configuration;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\NonUniqueResultException;
 use Doctrine\ORM\NoResultException;
@@ -223,6 +224,23 @@ abstract class QueryObject implements QueryObjectInterface
 
 					$_column = $this->addColumnPrefix($_column);
 					$_column = $this->getJoinedEntityColumnName($_column);
+
+					if ($this instanceof PostgreQueryObjectInterface && $this->hasDqlStringFunction('CAST')) {
+						switch ($mode) {
+							case QueryObjectByMode::EQUALS:
+							case QueryObjectByMode::NOT_EQUALS:
+							case QueryObjectByMode::STARTS_WITH:
+							case QueryObjectByMode::ENDS_WITH:
+							case QueryObjectByMode::CONTAINS:
+							case QueryObjectByMode::NOT_CONTAINS:
+							case QueryObjectByMode::IS_NULL:
+							case QueryObjectByMode::IS_NOT_NULL:
+							case QueryObjectByMode::IN_ARRAY:
+							case QueryObjectByMode::NOT_IN_ARRAY:
+								$_column = sprintf('CAST(%s AS TEXT)', $_column);
+								break;
+						}
+					}
 
 					switch ($mode) {
 						case QueryObjectByMode::EQUALS:
@@ -980,5 +998,12 @@ abstract class QueryObject implements QueryObjectInterface
 	{
 		$this->postFetch[] = $fieldName;
 		return $this;
+	}
+
+	protected function hasDqlStringFunction(string $name): bool
+	{
+		$config = $this->em->getConfiguration();
+
+		return (bool)$config->getCustomStringFunction($name);
 	}
 }
