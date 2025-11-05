@@ -11,7 +11,7 @@ trait Identifier
 	#[ORM\Id]
 	#[ORM\Column(nullable: false)]
 	#[ORM\GeneratedValue]
-	private ?int $id = null;
+	protected ?int $id = null;
 
 	public function getId(): ?int
 	{
