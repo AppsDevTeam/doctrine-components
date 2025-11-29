@@ -651,12 +651,11 @@ abstract class QueryObject implements QueryObjectInterface
 			throw new Exception('Cannot call fetchField on a query object with modified columns.');
 		}
 
-		$identifierFieldName = $this->em->getClassMetadata($this->getEntityClass())->getIdentifierFieldNames()[0];
-		if ($field === $identifierFieldName) {
-			$qb->select('e.' . $field . ' AS field');
-		} else {
+		if ($this->em->getClassMetadata($this->getEntityClass())->hasAssociation($field)) {
 			$qb->select('IDENTITY(e.' . $field . ') AS field')
 				->groupBy('e.' . $field);
+		} else {
+			$qb->select('e.' . $field . ' AS field');
 		}
 
 		$query = $this->getQuery($qb);
