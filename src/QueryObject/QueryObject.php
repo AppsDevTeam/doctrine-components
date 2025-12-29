@@ -425,12 +425,12 @@ abstract class QueryObject implements QueryObjectInterface
 		}
 		unset ($_filter);
 
-		$forbiddenDQLParts = ['select', 'distinct', 'orderBy'];
-		foreach ($forbiddenDQLParts as $_forbiddenDQLPart) {
-			if ($qb->getDQLPart($_forbiddenDQLPart)) {
-				throw new Exception('Modifying "' . $_forbiddenDQLPart . '" DQL part in filters is not allowed.');
-			}
-		}
+//		$forbiddenDQLParts = ['select', 'distinct', 'orderBy'];
+//		foreach ($forbiddenDQLParts as $_forbiddenDQLPart) {
+//			if ($qb->getDQLPart($_forbiddenDQLPart)) {
+//				throw new Exception('Modifying "' . $_forbiddenDQLPart . '" DQL part in filters is not allowed.');
+//			}
+//		}
 
 		//orById
 		if ($this->orByIdFilter && $qb->getDQLPart('where')) {
