@@ -74,4 +74,20 @@ class EntityManager extends EntityManagerDecorator
 
 		throw new Exception('There is no entity with interface "' . $interfaceName . '".');
 	}
+
+	public function getLock(string $name, int $timeout = -1): void
+	{
+		$this->getConnection()->executeStatement(
+			'SELECT GET_LOCK(?, ?)',
+			[$name, $timeout]
+		);
+	}
+
+	public function releaseLock(string $name): void
+	{
+		$this->getConnection()->executeStatement(
+			'SELECT RELEASE_LOCK(?)',
+			[$name]
+		);
+	}
 }

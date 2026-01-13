@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace ADT\DoctrineComponents;
 
+use ADT\DoctrineComponents\Entities\Entity;
 use Doctrine\Common\EventSubscriber;
 use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Event\PostPersistEventArgs;
@@ -169,11 +170,16 @@ abstract class BaseListener implements EventSubscriber
 		}
 	}
 
-	protected function isPropertyChanged($entity, $property): bool
+	protected function isPropertyChanged(Entity $entity, array|string $property): bool
 	{
 		$uow = $this->em->getUnitOfWork();
 		$changeSet = $uow->getEntityChangeSet($entity);
-		return isset($changeSet[$property]) && $changeSet[$property][0] !== $changeSet[$property][1];
+		foreach ((array)$property as $_property) {
+			if (isset($changeSet[$_property]) && $changeSet[$_property][0] !== $changeSet[$_property][1]) {
+				return true;				
+			}
+		}
+		return false;
 	}
 
 	protected function recalculateEntities(): void
