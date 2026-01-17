@@ -357,6 +357,20 @@ foreach ($profiles as $_profile) {
 
 You should always use new `EntityManager` instance, not the default one (because of `EntityManager::clear`).
 
+### Default collections order by `id`
+
+If you want all collection associations (`OneToMany`, `ManyToMany`) to be automatically ordered by the primary key `id` (ASC), you can use the built-in Doctrine subscriber `DefaultOrderByIdSubscriber`.
+It hooks into the metadata loading process and applies `ORDER BY id ASC` to every collection that does not already define its own ordering.
+This ensures stable and deterministic ordering across your application without having to manually specify `orderBy` in every entity.
+
+Simply enable the subscriber in your neon configuration:
+
+```yaml
+services:
+	- ADT\DoctrineComponents\Subscribers\DefaultOrderByIdSubscriber
+```
+
+
 ## Tips
 
 - Always have all logic inside a `filter` or `order` callback. This will ensure that all dependencies (like a logged user etc.) are already set.
