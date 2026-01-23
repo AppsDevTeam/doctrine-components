@@ -643,7 +643,7 @@ abstract class QueryObject implements QueryObjectInterface
 	/**
 	 * @throws Exception
 	 */
-	public function fetchField(string $field): array
+	public function fetchField(string $field, bool $lock = false): array
 	{
 		$qb = $this->createQueryBuilder(false);
 
@@ -660,6 +660,10 @@ abstract class QueryObject implements QueryObjectInterface
 
 		$query = $this->getQuery($qb);
 
+		if ($lock) {
+			$query->setLockMode(Doctrine\DBAL\LockMode::PESSIMISTIC_WRITE);
+		}
+		
 		$items = [];
 		foreach ($query->getResult(AbstractQuery::HYDRATE_SCALAR) as $item) {
 			$items[$item['field']] = $item['field'];
