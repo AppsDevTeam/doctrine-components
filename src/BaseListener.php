@@ -5,6 +5,7 @@ namespace ADT\DoctrineComponents;
 
 use ADT\DoctrineComponents\Entities\Entity;
 use Doctrine\Common\EventSubscriber;
+use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Event\PostPersistEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
@@ -49,7 +50,7 @@ abstract class BaseListener implements EventSubscriber
 		}
 		EntityManager::$isFlushAllowed = true;
 
-		$this->recalculateEntities();
+		$this->recalculateEntities($eventArgs->getObjectManager());
 	}
 
 	/**
@@ -66,7 +67,7 @@ abstract class BaseListener implements EventSubscriber
 		}
 		EntityManager::$isFlushAllowed = true;
 
-		$this->recalculateEntities();
+		$this->recalculateEntities($eventArgs->getObjectManager());
 	}
 
 	/**
@@ -83,7 +84,7 @@ abstract class BaseListener implements EventSubscriber
 		}
 		EntityManager::$isFlushAllowed = true;
 
-		$this->recalculateEntities();
+		$this->recalculateEntities($eventArgs->getObjectManager());
 	}
 
 	/**
@@ -100,7 +101,7 @@ abstract class BaseListener implements EventSubscriber
 		}
 		EntityManager::$isFlushAllowed = true;
 
-		$this->recalculateEntities();
+		$this->recalculateEntities($eventArgs->getObjectManager());
 	}
 
 	/**
@@ -117,7 +118,7 @@ abstract class BaseListener implements EventSubscriber
 		}
 		EntityManager::$isFlushAllowed = true;
 
-		$this->recalculateEntities();
+		$this->recalculateEntities($eventArgs->getObjectManager());
 	}
 
 	/**
@@ -182,7 +183,7 @@ abstract class BaseListener implements EventSubscriber
 		return false;
 	}
 
-	protected function recalculateEntities(): void
+	protected function recalculateEntities(EntityManagerInterface $em): void
 	{
 		$uniqueEntitiesToCompute = array_intersect_key($this->entitiesToCompute, array_unique(array_map('spl_object_id', $this->entitiesToCompute)));
 		$this->entitiesToCompute = [];
@@ -193,7 +194,7 @@ abstract class BaseListener implements EventSubscriber
 		$uniqueEntitiesToRecalculate = array_intersect_key($this->entitiesToRecompute, array_unique(array_map('spl_object_id', $this->entitiesToRecompute)));
 		$this->entitiesToRecompute = [];
 		foreach ($uniqueEntitiesToRecalculate as $_entity) {
-			$this->em->getUnitOfWork()->recomputeSingleEntityChangeSet($this->em->getClassMetadata($_entity::class), $_entity);
+			$em->getUnitOfWork()->recomputeSingleEntityChangeSet($em->getClassMetadata($_entity::class), $_entity);
 		}
 	}
 
