@@ -1,11 +1,7 @@
 <?php
 
-namespace ADT\DoctrineComponents\QueryObject;
+namespace ADT\DoctrineComponents;
 
-use ADT\DoctrineComponents\IEntity;
-use ADT\DoctrineComponents\QueryObject\QueryObjectByMode;
-use ADT\DoctrineComponents\QueryObject\QueryObjectInterface;
-use ADT\DoctrineComponents\QueryObject\ResultSet;
 use ArrayIterator;
 use Closure;
 use Doctrine;
@@ -53,13 +49,13 @@ abstract class QueryObject implements QueryObjectInterface
 
 	private bool $isInitialized = false;
 
-	abstract public function getEntityClass(): string;
+	abstract protected function getEntityClass(): string;
 	abstract protected function setDefaultOrder(): void;
 
 	/**
 	 * @throws Exception
 	 */
-	public function __construct(EntityManagerInterface $em)
+	final public function __construct(EntityManagerInterface $em)
 	{
 		$this->em = $em;
 
@@ -227,98 +223,106 @@ abstract class QueryObject implements QueryObjectInterface
 					switch ($mode) {
 						case QueryObjectByMode::EQUALS:
 							$condition = "$_column = :$paramName";
+							$qb->setParameter($paramName, $value);
 							break;
 
 						case QueryObjectByMode::NOT_EQUALS:
 							$condition = "$_column != :$paramName";
+							$qb->setParameter($paramName, $value);
 							break;
 
 						case QueryObjectByMode::STARTS_WITH:
-							$value = "$value%";
 							$condition = "$_column LIKE :$paramName";
+							$qb->setParameter($paramName, "$value%");
 							break;
 
 						case QueryObjectByMode::ENDS_WITH:
-							$value = "%$value";
 							$condition = "$_column LIKE :$paramName";
+							$qb->setParameter($paramName, "%$value");
 							break;
 
 						case QueryObjectByMode::CONTAINS:
-							$value = "%$value%";
-							$condition = "$_column LIKE :$paramName";
+							if (is_array($value)) {
+								$conditions = [];
+								foreach ($value as $idx => $_value) {
+									$_paramName = $paramName . '_' . $idx;
+									$conditions[] = "$_column LIKE :$_paramName";
+									$qb->setParameter($_paramName, "%$_value%");
+								}
+								$condition = '(' . implode(' OR ', $conditions) . ')';
+							} else {
+								$condition = "$_column LIKE :$paramName";
+								$qb->setParameter($paramName, "%$value%");
+							}
 							break;
 
 						case QueryObjectByMode::NOT_CONTAINS:
-							$value = "%$value%";
 							$condition = "$_column NOT LIKE :$paramName";
+							$qb->setParameter($paramName, "%$value%");
 							break;
 
 						case QueryObjectByMode::IS_NULL:
-							$value = null;
 							$condition = "$_column IS NULL";
 							break;
 
 						case QueryObjectByMode::IS_NOT_NULL:
-							$value = null;
 							$condition = "$_column IS NOT NULL";
 							break;
 
 						case QueryObjectByMode::IN_ARRAY:
 							$condition = "$_column IN (:$paramName)";
+							$qb->setParameter($paramName, $value);
 							break;
 
 						case QueryObjectByMode::NOT_IN_ARRAY:
 							$condition = "$_column NOT IN (:$paramName)";
+							$qb->setParameter($paramName, $value);
 							break;
 
 						case QueryObjectByMode::GREATER:
 							$condition = "$_column > :$paramName";
+							$qb->setParameter($paramName, $value);
 							break;
 
 						case QueryObjectByMode::GREATER_OR_EQUAL:
 							$condition = "$_column >= :$paramName";
+							$qb->setParameter($paramName, $value);
 							break;
 
 						case QueryObjectByMode::LESS:
 							$condition = "$_column < :$paramName";
+							$qb->setParameter($paramName, $value);
 							break;
 
 						case QueryObjectByMode::LESS_OR_EQUAL:
 							$condition = "$_column <= :$paramName";
+							$qb->setParameter($paramName, $value);
 							break;
 
 						case QueryObjectByMode::BETWEEN:
 							$condition = "$_column BETWEEN :$paramName AND :$paramName2";
+							$qb->setParameter($paramName, $value[0]);
+							$qb->setParameter($paramName2, $value[1]);
 							break;
 
 						case QueryObjectByMode::NOT_BETWEEN:
 							$condition = "$_column NOT BETWEEN :$paramName AND :$paramName2";
+							$qb->setParameter($paramName, $value[0]);
+							$qb->setParameter($paramName2, $value[1]);
 							break;
 
 						case QueryObjectByMode::MEMBER_OF:
 							$condition = ":$paramName MEMBER OF $_column";
-							break;
-
-						case QueryObjectByMode::NOT_MEMBER_OF:
-							$condition = ":$paramName NOT MEMBER OF $_column";
+							$qb->setParameter($paramName, $value);
 							break;
 
 						case QueryObjectByMode::IS_EMPTY:
-							$value = null;
 							$condition = "$_column IS EMPTY";
 							break;
 
 						case QueryObjectByMode::IS_NOT_EMPTY:
-							$value = null;
 							$condition = "$_column IS NOT EMPTY";
 							break;
-					}
-
-					if (isset($paramName2)) {
-						$qb->setParameter($paramName, $value[0]);
-						$qb->setParameter($paramName2, $value[1]);
-					} elseif (isset($paramName)) {
-						$qb->setParameter($paramName, $value);
 					}
 
 					return $condition;
@@ -425,12 +429,12 @@ abstract class QueryObject implements QueryObjectInterface
 		}
 		unset ($_filter);
 
-//		$forbiddenDQLParts = ['select', 'distinct', 'orderBy'];
-//		foreach ($forbiddenDQLParts as $_forbiddenDQLPart) {
-//			if ($qb->getDQLPart($_forbiddenDQLPart)) {
-//				throw new Exception('Modifying "' . $_forbiddenDQLPart . '" DQL part in filters is not allowed.');
-//			}
-//		}
+		$forbiddenDQLParts = ['select', 'distinct', 'orderBy'];
+		foreach ($forbiddenDQLParts as $_forbiddenDQLPart) {
+			if ($qb->getDQLPart($_forbiddenDQLPart)) {
+				throw new Exception('Modifying "' . $_forbiddenDQLPart . '" DQL part in filters is not allowed.');
+			}
+		}
 
 		//orById
 		if ($this->orByIdFilter && $qb->getDQLPart('where')) {
@@ -643,7 +647,7 @@ abstract class QueryObject implements QueryObjectInterface
 	/**
 	 * @throws Exception
 	 */
-	public function fetchField(string $field, bool $lock = false): array
+	public function fetchField(string $field): array
 	{
 		$qb = $this->createQueryBuilder(false);
 
@@ -651,19 +655,16 @@ abstract class QueryObject implements QueryObjectInterface
 			throw new Exception('Cannot call fetchField on a query object with modified columns.');
 		}
 
-		if ($this->em->getClassMetadata($this->getEntityClass())->hasAssociation($field)) {
+		$identifierFieldName = $this->em->getClassMetadata($this->getEntityClass())->getIdentifierFieldNames()[0];
+		if ($field === $identifierFieldName) {
+			$qb->select('e.' . $field . ' AS field');
+		} else {
 			$qb->select('IDENTITY(e.' . $field . ') AS field')
 				->groupBy('e.' . $field);
-		} else {
-			$qb->select('e.' . $field . ' AS field');
 		}
 
 		$query = $this->getQuery($qb);
 
-		if ($lock) {
-			$query->setLockMode(Doctrine\DBAL\LockMode::PESSIMISTIC_WRITE);
-		}
-		
 		$items = [];
 		foreach ($query->getResult(AbstractQuery::HYDRATE_SCALAR) as $item) {
 			$items[$item['field']] = $item['field'];
