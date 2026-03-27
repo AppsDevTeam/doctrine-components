@@ -19,6 +19,7 @@
 	"require": {
 		"php": ">=8.4",
 		"doctrine/orm": "^2.18|^3.0",
+		"doctrine/event-manager": "^1.0|^2.0",
 		"nette/utils": "^3.2|^4.0",
 		"tracy/tracy": "^2.10",
 		"psr/log": "^3.0",
