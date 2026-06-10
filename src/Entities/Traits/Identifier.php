@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace ADT\DoctrineComponents\Entities\Traits;
 
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
 trait Identifier
 {
 	#[ORM\Id]
-	#[ORM\Column(nullable: false)]
+	#[ORM\Column(type: Types::BIGINT, nullable: false)]
 	#[ORM\GeneratedValue]
 	protected ?int $id = null;
 
