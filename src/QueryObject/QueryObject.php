@@ -146,7 +146,7 @@ abstract class QueryObject implements QueryObjectInterface
 				if (is_object($item)) {
 					$this->orByIdFilter[$item->getId()] = $item->getId();
 				}
-				else {
+				elseif ($item !== null) {
 					$this->orByIdFilter[$item] = $item;
 				}
 			}
@@ -154,7 +154,7 @@ abstract class QueryObject implements QueryObjectInterface
 		elseif (is_object($id)) {
 			$this->orByIdFilter[$id->getId()] = $id->getId();
 		}
-		else {
+		elseif ($id !== null) {
 			$this->orByIdFilter[$id] = $id;
 		}
 
