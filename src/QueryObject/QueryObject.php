@@ -216,7 +216,7 @@ abstract class QueryObject implements QueryObjectInterface
 					if (!in_array($mode, [QueryObjectByMode::IS_NULL, QueryObjectByMode::IS_NOT_NULL, QueryObjectByMode::IS_EMPTY, QueryObjectByMode::IS_NOT_EMPTY])) {
 						$paramName = 'by_' . str_replace('.', '_', $_column);
 						// Pro between chceme rozdelit value do dvou různých podmínek
-						if (in_array($mode, [QueryObjectByMode::BETWEEN, $mode === QueryObjectByMode::NOT_BETWEEN])) {
+						if (in_array($mode, [QueryObjectByMode::BETWEEN, QueryObjectByMode::NOT_BETWEEN], true)) {
 							$paramName2 = 'by_' . str_replace('.', '_', $_column) . '_2';
 						}
 					}
