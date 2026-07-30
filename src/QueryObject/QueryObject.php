@@ -214,10 +214,12 @@ abstract class QueryObject implements QueryObjectInterface
 					}
 
 					if (!in_array($mode, [QueryObjectByMode::IS_NULL, QueryObjectByMode::IS_NOT_NULL, QueryObjectByMode::IS_EMPTY, QueryObjectByMode::IS_NOT_EMPTY])) {
-						$paramName = 'by_' . str_replace('.', '_', $_column);
 						// Pro between chceme rozdelit value do dvou různých podmínek
-						if (in_array($mode, [QueryObjectByMode::BETWEEN, QueryObjectByMode::NOT_BETWEEN], true)) {
-							$paramName2 = 'by_' . str_replace('.', '_', $_column) . '_2';
+						$isBetween = in_array($mode, [QueryObjectByMode::BETWEEN, QueryObjectByMode::NOT_BETWEEN], true);
+
+						$paramName = $this->getUniqueParamName($qb, 'by_' . str_replace('.', '_', $_column), $isBetween);
+						if ($isBetween) {
+							$paramName2 = $paramName . '_2';
 						}
 					}
 
@@ -328,6 +330,32 @@ abstract class QueryObject implements QueryObjectInterface
 			$qb->andWhere($qb->expr()->orX(...$x));
 		};
 		return $this;
+	}
+
+	/**
+	 * Vrátí název parametru, který v query ještě není použitý.
+	 * Stejný sloupec může být filtrovaný vícekrát (např. fulltext hledání a zároveň
+	 * další podmínka nad tím samým sloupcem); bez unikátního názvu by pozdější
+	 * podmínka přepsala hodnotu parametru té dřívější.
+	 *
+	 * @param QueryBuilder $qb
+	 * @param string $paramName
+	 * @param bool $withSecondParam Rezervuje i název pro druhý parametr (between)
+	 * @return string
+	 * @internal
+	 */
+	final protected function getUniqueParamName(QueryBuilder $qb, string $paramName, bool $withSecondParam = false): string
+	{
+		$isUsed = fn(string $name) => $qb->getParameter($name) !== null
+			|| ($withSecondParam && $qb->getParameter($name . '_2') !== null);
+
+		$uniqueParamName = $paramName;
+		$i = 1;
+		while ($isUsed($uniqueParamName)) {
+			$uniqueParamName = $paramName . '_' . ++$i;
+		}
+
+		return $uniqueParamName;
 	}
 
 	/**
