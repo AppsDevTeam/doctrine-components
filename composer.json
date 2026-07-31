@@ -18,7 +18,8 @@
 	},
 	"require": {
 		"php": ">=8.4",
-		"doctrine/orm": "^2.18|^3.0",
+		"doctrine/orm": "^3.3",
+		"doctrine/dbal": "^4.0",
 		"nette/utils": "^3.2|^4.0",
 		"tracy/tracy": "^2.10",
 		"psr/log": "^3.0",

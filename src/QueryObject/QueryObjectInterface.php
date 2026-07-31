@@ -6,7 +6,7 @@ use Generator;
 
 interface QueryObjectInterface
 {
-	public function by(array|string $column, mixed $value, QueryObjectByMode $mode = QueryObjectByMode::AUTO): static;
+	public function by(array|string $column, mixed $value, QueryObjectByMode $mode = QueryObjectByMode::AUTO, ?string $filterKey = null): static;
 	public function byId($id): static;
 
 	public function orderBy(array|string $field, ?string $order = null): static;

@@ -96,6 +96,10 @@ Method `by` is a shortcut for creating `filter` callbacks. It offers some useful
 
 - When there are more columns, `orWhere` is used among them.
 
+- Pass `$filterKey` as the fourth argument to register the filter under a name, so that it can be
+  turned off later with `disableFilter()`. Calling `by()` again with the same key replaces the filter
+  instead of adding a second condition.
+
 - If a `$value` is type of 'string', `LIKE %$value%` is used. You can change it by parameter `filterType` with value `FilterTypeEnum::STRICT`.
 
 - If you would like get all value in certain range, you can use parameter `filterType` with value `FilterTypeEnum::RANGE`.
@@ -246,6 +250,10 @@ public function byShowOnWeb(): static
 ```
 
 Unlike `QueryBuilder::innerJoin` and `QueryBuilder::leftJoin`, this ensures that same joins are not used multiple times and don't throw an error.
+
+Joins are deduplicated **by alias only**, the first join registered for an alias wins. A subclass can
+use that to re-point an alias: register the join before calling `parent::init()` and every inherited
+join and condition using that alias will refer to your relation instead.
 
 ### More columns
 

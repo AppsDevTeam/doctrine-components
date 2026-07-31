@@ -2,7 +2,7 @@
 
 namespace ADT\DoctrineComponents\QueryObject;
 
-use ADT\DoctrineComponents\IEntity;
+use ADT\DoctrineComponents\Entities\Entity;
 use ADT\DoctrineComponents\QueryObject\QueryObjectByMode;
 use ADT\DoctrineComponents\QueryObject\QueryObjectInterface;
 use ADT\DoctrineComponents\QueryObject\ResultSet;
@@ -102,63 +102,60 @@ abstract class QueryObject implements QueryObjectInterface
 	 *********************/
 
 	/**
-	 * @param int|int[]|IEntity|IEntity[]|[]|null $id
+	 * @param int|int[]|Entity|Entity[]|[]|null $id
 	 * @return static
 	 */
 	public function byId($id): static
 	{
 		if (is_iterable($id) && !is_string($id)) {
-			foreach ($id as $item) {
-				if (is_object($item)) {
-					$this->byIdFilter[$item->getId()] = $item->getId();
-				}
-				else {
-					$this->byIdFilter[$item] = $item;
-				}
+			$items = is_array($id) ? $id : iterator_to_array($id, false);
+
+			//An empty input discards previously collected ids and sets 'id IN (NULL)' in the resulting filters
+			if (count($items) === 0) {
+				$this->byIdFilter = [];
+
+				return $this;
 			}
 
-			//If we did not fill anything, we want to set an empty array to set the 'id IN (NULL)' in the resulting filters
-			if (count($id) === 0) {
-				$this->byIdFilter = [];
+			//Ids that are null are skipped, but the filter itself is still applied
+			$this->byIdFilter ??= [];
+			foreach ($items as $item) {
+				if (($_id = $this->resolveId($item)) !== null) {
+					$this->byIdFilter[$_id] = $_id;
+				}
 			}
 		}
-		elseif (is_object($id)) {
-			$this->byIdFilter[$id->getId()] = $id->getId();
-		}
-		//we still want to add 'id IN (null)' if we pass $id=null
-		elseif ($id === null) {
-			$this->byIdFilter = [];
-		}
+		//we still want to add 'id IN (null)' if we pass $id=null or an entity without an id
 		else {
-			$this->byIdFilter[$id] = $id;
+			$this->byIdFilter ??= [];
+			if (($_id = $this->resolveId($id)) !== null) {
+				$this->byIdFilter[$_id] = $_id;
+			}
 		}
 
 		return $this;
 	}
 
 	/**
-	 * @param int|int[]|IEntity|IEntity[] $id
+	 * @param int|int[]|Entity|Entity[] $id
 	 */
 	final public function orById($id): static
 	{
-		if (is_iterable($id) && !is_string($id)) {
-			foreach ($id as $item) {
-				if (is_object($item)) {
-					$this->orByIdFilter[$item->getId()] = $item->getId();
-				}
-				elseif ($item !== null) {
-					$this->orByIdFilter[$item] = $item;
-				}
+		foreach (is_iterable($id) && !is_string($id) ? $id : [$id] as $item) {
+			if (($_id = $this->resolveId($item)) !== null) {
+				$this->orByIdFilter[$_id] = $_id;
 			}
-		}
-		elseif (is_object($id)) {
-			$this->orByIdFilter[$id->getId()] = $id->getId();
-		}
-		elseif ($id !== null) {
-			$this->orByIdFilter[$id] = $id;
 		}
 
 		return $this;
+	}
+
+	/**
+	 * @param int|string|Entity|null $id
+	 */
+	private function resolveId(mixed $id): int|string|null
+	{
+		return is_object($id) ? $id->getId() : $id;
 	}
 
 	final public function disableFilter(array|string $filter): static
@@ -184,11 +181,12 @@ abstract class QueryObject implements QueryObjectInterface
 	 * @param string|string[] $column
 	 * @param mixed $value
 	 * @param QueryObjectByMode $mode
+	 * @param string|null $filterKey Pod tímto klíčem lze filtr později vypnout přes disableFilter()
 	 * @return $this
 	 */
-	final public function by(array|string $column, mixed $value = null, QueryObjectByMode $mode = QueryObjectByMode::AUTO): static
+	final public function by(array|string $column, mixed $value = null, QueryObjectByMode $mode = QueryObjectByMode::AUTO, ?string $filterKey = null): static
 	{
-		$this->filter[] = function (QueryBuilder $qb) use ($column, $value, $mode) {
+		$filter = function (QueryBuilder $qb) use ($column, $value, $mode) {
 			$column = (array) $column;
 
 			$this->validateFieldNames($column);
@@ -329,6 +327,13 @@ abstract class QueryObject implements QueryObjectInterface
 			);
 			$qb->andWhere($qb->expr()->orX(...$x));
 		};
+
+		if ($filterKey !== null) {
+			$this->filter[$filterKey] = $filter;
+		} else {
+			$this->filter[] = $filter;
+		}
+
 		return $this;
 	}
 
@@ -376,7 +381,7 @@ abstract class QueryObject implements QueryObjectInterface
 				throw new Exception('Parameter "$field" cannot be empty.');
 			}
 
-			$this->validateFieldNames($field);
+			$this->validateFieldNames(array_keys($field));
 
 			$this->addJoins($qb, array_keys($field));
 
@@ -402,7 +407,6 @@ abstract class QueryObject implements QueryObjectInterface
 			foreach ($_row as $_property => $_value) {
 				if ($reflectionClass->hasProperty($_property)) {
 					$prop = $reflectionClass->getProperty($_property);
-					$prop->setAccessible(true);
 					$prop->setValue($_dto, $_value);
 				} else {
 					throw new Exception('Property ' . $dtoClass . '::' . $_property . ' does not exist.');
@@ -416,8 +420,8 @@ abstract class QueryObject implements QueryObjectInterface
 	/** @internal */
 	final protected function validateFieldNames(array $fields): void
 	{
-		foreach ($fields as $_name => $_order) {
-			if (explode('.', $_name)[0] === $this->entityAlias) {
+		foreach ($fields as $_name) {
+			if (explode('.', (string) $_name)[0] === $this->entityAlias) {
 				throw new Exception('Do not use entity alias in field names.');
 			}
 		}
@@ -460,16 +464,16 @@ abstract class QueryObject implements QueryObjectInterface
 //			}
 //		}
 
-		//orById
-		if ($this->orByIdFilter && $qb->getDQLPart('where')) {
-			$qb->orWhere('e.id IN (:orByIdFilter)')
-				->setParameter('orByIdFilter', $this->orByIdFilter);
+		//byId has to be applied first, otherwise orById would not see it and would be dropped
+		if ($this->byIdFilter !== null) {
+			$qb->andWhere($this->entityAlias . '.id IN (:byIdFilter)')
+				->setParameter('byIdFilter', $this->byIdFilter);
 		}
 
-		//byId
-		if ($this->byIdFilter !== null) {
-			$qb->andWhere('e.id IN (:byIdFilter)')
-				->setParameter('byIdFilter', $this->byIdFilter);
+		//without any other condition the query already returns everything, so "OR id IN (...)" would be a no-op
+		if ($this->orByIdFilter && $qb->getDQLPart('where')) {
+			$qb->orWhere($this->entityAlias . '.id IN (:orByIdFilter)')
+				->setParameter('orByIdFilter', $this->orByIdFilter);
 		}
 
 		if ($withSelectAndOrder) {
@@ -507,13 +511,10 @@ abstract class QueryObject implements QueryObjectInterface
 			}
 
 			$aliasLast = null;
-			foreach (explode('.', $column, '-1') as $aliasNew) {
+			foreach (explode('.', $column, -1) as $aliasNew) {
 				$join = $aliasLast ? $aliasLast . '.' . $aliasNew : $this->addColumnPrefix($aliasNew);
-				$filterKey = $this->getJoinFilterKey($join, $aliasNew);
-				if (!$this->isAlreadyJoined($filterKey)) {
-					// because order is a reserved word
-					$this->commonJoin($qb, $joinType, $join, $aliasNew);
-				}
+				// because order is a reserved word
+				$this->commonJoin($qb, $joinType, $join, $aliasNew);
 				$aliasLast = $aliasNew;
 			}
 		}
@@ -534,27 +535,24 @@ abstract class QueryObject implements QueryObjectInterface
 		return implode('.', array_slice(explode('.', $column), -2));
 	}
 
+	/**
+	 * Joins are deduplicated by alias only, the first join for a given alias wins.
+	 *
+	 * That is intentional and load bearing: a subclass can register a join under an alias before
+	 * calling parent::init(), which re-points every inherited join and condition using that alias
+	 * to a different relation. Comparing the join target here and failing on a mismatch would
+	 * break that pattern.
+	 */
 	private function commonJoin(QueryBuilder $qb, string $joinType, string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): self
 	{
-		$join = $this->addColumnPrefix($join);
-		$filterKey = $this->getJoinFilterKey($join, $alias, $conditionType, $condition, $indexBy);
-
-		if (! $this->isAlreadyJoined($filterKey)) {
-			$qb->$joinType($join, $alias, $conditionType, $condition, $indexBy);
-			$this->join[$filterKey] = true;
+		if (isset($this->join[$alias])) {
+			return $this;
 		}
 
+		$qb->$joinType($this->addColumnPrefix($join), $alias, $conditionType, $condition, $indexBy);
+		$this->join[$alias] = true;
+
 		return $this;
-	}
-
-	private function getJoinFilterKey(string $join, string $alias, ?string $conditionType = null, ?string $condition = null, ?string $indexBy = null): string
-	{
-		return implode('_', [$alias]);
-	}
-
-	private function isAlreadyJoined(string $filterKey): bool
-	{
-		return isset($this->join[$filterKey]);
 	}
 
 	/*********
@@ -631,8 +629,6 @@ abstract class QueryObject implements QueryObjectInterface
 			throw new NonUniqueResultException();
 		}
 
-		$this->postFetch(new ArrayIterator($result));
-
 		return $result[0];
 	}
 
@@ -655,6 +651,10 @@ abstract class QueryObject implements QueryObjectInterface
 	 */
 	public function fetchPairs(?string $value, ?string $key): array
 	{
+		if ($key === null) {
+			throw new Exception('Parameter "$key" is required, there is nothing to key the result by.');
+		}
+
 		$items = [];
 		foreach ($this->fetch() as $item) {
 			$_key = $item->{'get' . ucfirst($key)}();
@@ -680,10 +680,10 @@ abstract class QueryObject implements QueryObjectInterface
 		}
 
 		if ($this->em->getClassMetadata($this->getEntityClass())->hasAssociation($field)) {
-			$qb->select('IDENTITY(e.' . $field . ') AS field')
-				->groupBy('e.' . $field);
+			$qb->select('IDENTITY(' . $this->entityAlias . '.' . $field . ') AS field')
+				->groupBy($this->entityAlias . '.' . $field);
 		} else {
-			$qb->select('e.' . $field . ' AS field');
+			$qb->select($this->entityAlias . '.' . $field . ' AS field');
 		}
 
 		$query = $this->getQuery($qb);
@@ -694,7 +694,7 @@ abstract class QueryObject implements QueryObjectInterface
 		
 		$items = [];
 		foreach ($query->getResult(AbstractQuery::HYDRATE_SCALAR) as $item) {
-			$items[$item['field']] = $item['field'];
+			$items[$item['field'] ?? ''] = $item['field'];
 		}
 
 		return $items;
@@ -752,7 +752,7 @@ abstract class QueryObject implements QueryObjectInterface
 
 	/**
 	 * @param EntityManagerInterface $em
-	 * @param IEntity[] $rootEntities Jeden typ entit, např. 10x User.
+	 * @param Entity[] $rootEntities Jeden typ entit, např. 10x User.
 	 * @param string[] $fieldNames Názvy relací v hlavní entitě. Pro zanoření použij '.'. Např. [ 'address' ].
 	 * @throws ReflectionException
 	 * @throws Exception
@@ -792,7 +792,7 @@ abstract class QueryObject implements QueryObjectInterface
 			$firstRootEntity = $rootEntities[0];
 		}
 
-		if (!is_object($firstRootEntity) || !($firstRootEntity instanceof IEntity)) {
+		if (!is_object($firstRootEntity) || !($firstRootEntity instanceof Entity)) {
 			// a není to entita, rychle pryč
 			return;
 		}
@@ -817,7 +817,7 @@ abstract class QueryObject implements QueryObjectInterface
 
 		// připravíme QueryBuilder pro vytažení IDček *_TO_ONE asociací, např. z Userů
 		$qb = $em->getRepository(get_class($firstRootEntity))->createQueryBuilder('e')
-			->select('PARTIAL e.{id} AS e_id')
+			->select('e.id')
 			->andWhere('e.id IN (:ids)')
 			->setParameter('ids', $rootIds);
 
@@ -828,7 +828,7 @@ abstract class QueryObject implements QueryObjectInterface
 			// $fieldName je např. 'address'
 			$association = $rootEntityAssociations[$fieldName];
 
-			if ($association['type'] & Doctrine\ORM\Mapping\ClassMetadataInfo::TO_ONE) {
+			if ($association['type'] & Doctrine\ORM\Mapping\ClassMetadata::TO_ONE) {
 				// pokud je asociace *_TO_ONE, tak přidáme select na její ID a zajistíme provedení dotazu
 
 				$qb->addSelect('IDENTITY(e.' . $fieldName . ') AS id_' . $i);
@@ -850,7 +850,7 @@ abstract class QueryObject implements QueryObjectInterface
 			$association = $rootEntityAssociations[$fieldName];
 
 			// $propertyName je název sloupce z druhé strany, např. Address#user
-			$propertyName = $association['mappedBy'] ?: $association['inversedBy'];
+			$propertyName = ($association['mappedBy'] ?? null) ?: ($association['inversedBy'] ?? null);
 
 			if ($propertyName === NULL) {
 				throw new Exception("PostFetch rootEntity='{$association['sourceEntity']}', targetEntity='{$association['targetEntity']}': Nelze přiřadit entity k root entitě. Chybí mappedBy nebo inversedBy.");
@@ -861,7 +861,7 @@ abstract class QueryObject implements QueryObjectInterface
 				->select('e')
 				->from($association['targetEntity'], 'e');
 
-			if ($association['type'] & Doctrine\ORM\Mapping\ClassMetadataInfo::TO_ONE) {
+			if ($association['type'] & Doctrine\ORM\Mapping\ClassMetadata::TO_ONE) {
 				// pokud se jedná a TO_ONE asociaci, posbíráme IDčka připojených entit
 				// např. u Usera je jen jedna adresa
 
@@ -883,13 +883,13 @@ abstract class QueryObject implements QueryObjectInterface
 				$qb
 					->orWhere('e.id IN (:ids)')
 					->setParameter('ids', array_unique($ids));
-			} elseif ($association['type'] === Doctrine\ORM\Mapping\ClassMetadataInfo::ONE_TO_MANY) {
+			} elseif ($association['type'] === Doctrine\ORM\Mapping\ClassMetadata::ONE_TO_MANY) {
 				// u ONE_TO_MANY asociací stačí selectovat podle IDček rootovských entit
 				// např. jeden User má více adres, v adrese je nastaven User
 				$qb
 					->orWhere('e.' . $association['mappedBy'] . ' IN (:ids)')
 					->setParameter('ids', array_unique($rootIds));
-			} elseif ($association['type'] === Doctrine\ORM\Mapping\ClassMetadataInfo::MANY_TO_MANY) {
+			} elseif ($association['type'] === Doctrine\ORM\Mapping\ClassMetadata::MANY_TO_MANY) {
 				// u MANY_TO_MANY asociací musíme (např. adresu) joinovat s root entitou (User) a pak selectovat podle IDček rootovských entit
 				$qb
 					->leftJoin('e.' . $propertyName, $propertyName)
@@ -906,14 +906,11 @@ abstract class QueryObject implements QueryObjectInterface
 
 			// v pripadne TO_ONE nám Doctrine entity přiřadí
 			// musime tedy poresit jen TO_MANY
-			if ($association['type'] & Doctrine\ORM\Mapping\ClassMetadataInfo::TO_MANY) {
+			if ($association['type'] & Doctrine\ORM\Mapping\ClassMetadata::TO_MANY) {
 				$refCollProperty = new ReflectionProperty(get_class($firstRootEntity), $association['fieldName']);
-				$refCollProperty->setAccessible(true);
-
 				$refInitProperty = new ReflectionProperty(PersistentCollection::class, 'initialized');
-				$refInitProperty->setAccessible(true);
 
-				if ($association['type'] === Doctrine\ORM\Mapping\ClassMetadataInfo::MANY_TO_MANY) {
+				if ($association['type'] === Doctrine\ORM\Mapping\ClassMetadata::MANY_TO_MANY) {
 					// u MANY_TO_MANY relací se nám ztratila informace o tom, která entita patří do jaké kolekce,
 					// dalším dotazem tedy zjistíme co kam máme dát
 
@@ -931,10 +928,9 @@ abstract class QueryObject implements QueryObjectInterface
 				foreach ($result as $row) {
 					$collections = [];
 
-					if ($association['type'] !== Doctrine\ORM\Mapping\ClassMetadataInfo::MANY_TO_MANY) {
+					if ($association['type'] !== Doctrine\ORM\Mapping\ClassMetadata::MANY_TO_MANY) {
 						$reflector = new ReflectionClass($row);
 						$property = $reflector->getProperty($propertyName);
-						$property->setAccessible(true);
 						$rootEntity = $property->getValue($row);
 						$collections[] = $refCollProperty->getValue($rootEntity);
 					} elseif (isset($manyToManyMapping)) {
