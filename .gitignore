@@ -2,3 +2,8 @@
 /composer.lock
 
 .idea
+
+/.phpunit.cache
+/phpunit.xml
+/coverage.xml
+/coverage

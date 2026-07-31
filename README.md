@@ -365,6 +365,39 @@ foreach ($profiles as $_profile) {
 
 You should always use new `EntityManager` instance, not the default one (because of `EntityManager::clear`).
 
+## Tests
+
+```
+composer install
+composer tests
+```
+
+By default the tests run against an in-memory SQLite database, so no external service is needed. The
+test entities and query objects used by the suite live in `tests/Fixtures`.
+
+To run the same suite against MySQL, set the connection via environment variables:
+
+```
+DB_DRIVER=pdo_mysql DB_HOST=127.0.0.1 DB_PORT=3306 DB_USER=root DB_PASSWORD=root \
+DB_NAME=doctrine_components_test vendor/bin/phpunit
+```
+
+The MySQL database is created once per process and emptied before every entity manager is handed out,
+so each test still starts from an empty database with auto increment reset. A handful of tests are
+driver specific (named `...OnMysql` / `...OnSqlite`) and skip themselves on the other driver.
+
+Because the suite drops the schema and truncates tables, two runs must never share one MySQL database
+at the same time - give each parallel run its own `DB_NAME`. In CI every job gets its own service
+container, so nothing is shared.
+
+CI (`.github/workflows/tests.yml`) runs the suite on PHP 8.4 and 8.5 against SQLite, on PHP 8.4/MySQL 8.0
+and PHP 8.5/MySQL 8.4, plus one job with the lowest allowed dependency versions.
+
+`phpunit.xml.dist` is strict: risky tests, warnings, notices and deprecations coming from `src`
+fail the build. There is no baseline, `src` is expected to stay free of deprecations.
+
+`docs/fixes.md` documents the bugs the test suite uncovered and how they were fixed.
+
 ## Tips
 
 - Always have all logic inside a `filter` or `order` callback. This will ensure that all dependencies (like a logged user etc.) are already set.
