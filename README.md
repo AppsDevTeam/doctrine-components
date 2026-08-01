@@ -327,6 +327,53 @@ public function orderByClosestDistance($customerLongitude, $customerLatitude): s
 
 Don't forget to use `AS HIDDEN` in your `addSelect` method, otherwise the `fetch*` methods won't work.
 
+### Fulltext search
+
+For a fulltext search over a column with a MySQL `FULLTEXT` index implement `SearchFulltextFilter` and use `SearchFulltextFilterTrait`:
+
+```php
+use ADT\DoctrineComponents\QueryObject\Filters\SearchFulltextFilter;
+use ADT\DoctrineComponents\QueryObject\Filters\SearchFulltextFilterTrait;
+
+class LocationQuery extends QueryObject implements SearchFulltextFilter
+{
+	use SearchFulltextFilterTrait;
+
+	public function byQuery(string $query): static
+	{
+		return $this->searchFulltext('searchString', $query);
+	}
+}
+```
+
+It generates `MATCH ... AGAINST (... IN BOOLEAN MODE) > 0`, so the `match_against` DQL function has to be registered in your application (the package doesn't do it for you):
+
+```neon
+nettrine.orm:
+	configuration:
+		customStringFunctions:
+			match_against: DoctrineExtensions\Query\Mysql\MatchAgainst
+```
+
+The value is split into words on every non-alphanumeric character (so boolean mode operators can't break the query), all words have to match (`AND`) and each of them matches from the beginning of an indexed word - `Ariola Martin` becomes `+Ariola* +Martin*`. Searching inside a word (`rtin`) never matches, that's how a FULLTEXT index works.
+
+Words shorter than `innodb_ft_min_token_size` are not in the index at all, those are searched with `LIKE '%word%'` instead, otherwise a two letter code would never be found. The default is 3 (MySQL InnoDB default), override it if your server is configured differently:
+
+```php
+protected function getFulltextMinWordLength(): int
+{
+	return 4;
+}
+```
+
+Diacritics are handled by the collation of the column, use an accent insensitive one (eg. `utf8mb4_0900_ai_ci`).
+
+A column path over relations works as well, the join is added automatically:
+
+```php
+$this->searchFulltext('location.searchString', $query);
+```
+
 ### Method `orById`
 
 If you want to get all active records plus a specific one, you can use `orById` method to bypass default filters:
