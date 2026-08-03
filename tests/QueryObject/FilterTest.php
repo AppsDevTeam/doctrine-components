@@ -130,6 +130,60 @@ final class FilterTest extends DatabaseTestCase
 		self::assertSame([FixtureLoader::AUTHOR_CYRIL, FixtureLoader::AUTHOR_EVA], self::idsOf($qo->fetch()));
 	}
 
+	public function testAFilterReplacingItselfUnderTheSameKeyIsApplied(): void
+	{
+		// líně registrovaný filtr, který teprve za běhu zavolá by() se svým vlastním klíčem,
+		// se v poli filtrů přepíše na pozici, která se právě vykonává
+		$qo = new AuthorQueryObject($this->em);
+		$qo->addFilter(AuthorQueryObject::FILTER_ACTIVE, function () use ($qo) {
+			$qo->by('isActive', true, filterKey: AuthorQueryObject::FILTER_ACTIVE);
+		});
+
+		self::assertDqlContains('WHERE e.isActive = :by_isActive', $qo->createQueryBuilder());
+	}
+
+	public function testAFilterReplacingItselfUnderTheSameKeyIsAppliedToResults(): void
+	{
+		$this->loadFixtures();
+
+		$qo = new AuthorQueryObject($this->em);
+		$qo->addFilter(AuthorQueryObject::FILTER_ACTIVE, function () use ($qo) {
+			$qo->by('isActive', false, filterKey: AuthorQueryObject::FILTER_ACTIVE);
+		});
+
+		self::assertSame([FixtureLoader::AUTHOR_CYRIL, FixtureLoader::AUTHOR_EVA], self::idsOf($qo->fetch()));
+	}
+
+	public function testAFilterReplacingItselfUnderTheSameKeyIsAppliedOnlyOnce(): void
+	{
+		$qo = new AuthorQueryObject($this->em);
+		$qo->addFilter(AuthorQueryObject::FILTER_ACTIVE, function () use ($qo) {
+			$qo->by('isActive', true, filterKey: AuthorQueryObject::FILTER_ACTIVE);
+		});
+
+		$qb = $qo->createQueryBuilder();
+
+		self::assertSame(1, substr_count(self::normalizeDql($qb->getDQL()), 'e.isActive'));
+	}
+
+	public function testAFilterReplacingAnAlreadyAppliedFilterIsApplied(): void
+	{
+		$qo = new AuthorQueryObject($this->em);
+		$qo->addFilter(AuthorQueryObject::FILTER_ACTIVE, function () use ($qo) {
+			$qo->by('isActive', true);
+		});
+		$qo->addFilter(AuthorQueryObject::FILTER_NAMED, function () use ($qo) {
+			$qo->by('name', 'Adam', filterKey: AuthorQueryObject::FILTER_ACTIVE);
+		});
+
+		$qb = $qo->createQueryBuilder();
+
+		// na pořadí podmínek ve WHERE nezáleží, obě ale musí být v query
+		self::assertDqlContains('e.isActive = :by_isActive', $qb);
+		self::assertDqlContains('e.name = :by_name', $qb);
+		self::assertSame(['by_isActive' => true, 'by_name' => 'Adam'], self::paramMap($qb));
+	}
+
 	public function testFiltersRunOnEveryQueryBuilderCreation(): void
 	{
 		$qo = new AuthorQueryObject($this->em);

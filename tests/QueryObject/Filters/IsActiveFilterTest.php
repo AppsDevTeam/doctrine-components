@@ -9,6 +9,7 @@ use ADT\DoctrineComponents\Tests\DatabaseTestCase;
 use ADT\DoctrineComponents\Tests\Fixtures\Entity\Author;
 use ADT\DoctrineComponents\Tests\Fixtures\FixtureLoader;
 use ADT\DoctrineComponents\Tests\Fixtures\QueryObject\ActiveAuthorQueryObject;
+use ADT\DoctrineComponents\Tests\Fixtures\QueryObject\LazyActiveAuthorQueryObject;
 
 final class IsActiveFilterTest extends DatabaseTestCase
 {
@@ -108,6 +109,52 @@ final class IsActiveFilterTest extends DatabaseTestCase
 		$qo = (new ActiveAuthorQueryObject($this->em))->disableIsActiveFilter()->disableIsActiveFilter();
 
 		self::assertSame([], $qo->getFilterKeys());
+	}
+
+	public function testALazilyRegisteredFilterAppliesTheCondition(): void
+	{
+		// regrese: byIsActive() se pod klíčem IS_ACTIVE_FILTER nahradí za právě vykonávaný
+		// callback, takže se podmínka nesmí zapomenout přidat do query
+		self::assertDqlContains(
+			'WHERE e.isActive = :by_isActive',
+			(new LazyActiveAuthorQueryObject($this->em))->createQueryBuilder(),
+		);
+	}
+
+	public function testALazilyRegisteredFilterReturnsOnlyActiveRows(): void
+	{
+		self::assertSame(
+			[FixtureLoader::AUTHOR_ADAM, FixtureLoader::AUTHOR_BEATA, FixtureLoader::AUTHOR_DAVID],
+			self::idsOf((new LazyActiveAuthorQueryObject($this->em))->fetch()),
+		);
+	}
+
+	public function testALazilyRegisteredFilterDoesNotStackConditions(): void
+	{
+		$qb = (new LazyActiveAuthorQueryObject($this->em))->createQueryBuilder();
+
+		self::assertSame(1, substr_count(self::normalizeDql($qb->getDQL()), 'e.isActive'));
+		self::assertSame(['by_isActive' => true], self::paramMap($qb));
+	}
+
+	public function testAnExplicitByIsActiveReplacesTheLazilyRegisteredFilter(): void
+	{
+		$qb = (new LazyActiveAuthorQueryObject($this->em))->byIsActive(false)->createQueryBuilder();
+
+		self::assertSame(1, substr_count(self::normalizeDql($qb->getDQL()), 'e.isActive'));
+		self::assertSame(['by_isActive' => false], self::paramMap($qb));
+	}
+
+	public function testDisableIsActiveFilterRemovesTheLazilyRegisteredFilter(): void
+	{
+		$qo = (new LazyActiveAuthorQueryObject($this->em))->disableIsActiveFilter();
+
+		self::assertSame([], $qo->getFilterKeys());
+		self::assertDqlSame(
+			'SELECT e FROM ' . Author::class . ' e ORDER BY e.id ASC',
+			$qo->createQueryBuilder(),
+		);
+		self::assertSame([1, 2, 3, 4, 5], self::idsOf($qo->fetch()));
 	}
 
 	public function testRepeatedByIsActiveDoesNotStackConditions(): void

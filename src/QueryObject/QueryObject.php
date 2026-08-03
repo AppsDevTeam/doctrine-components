@@ -451,11 +451,28 @@ abstract class QueryObject implements QueryObjectInterface
 
 		$this->join = [];
 
-		// we need to use a reference to allow adding a filter inside another filter
-		foreach ($this->filter as &$_filter) {
-			$_filter->call($this, $qb);
+		// a filter can register another filter, or replace itself under the same key
+		// (a lazily registered filter calling by() with the same $filterKey does exactly that),
+		// so we keep restarting until there is no filter left to apply
+		$applied = [];
+		while (true) {
+			$next = null;
+			foreach ($this->filter as $_key => $_filter) {
+				if (($applied[$_key] ?? null) === $_filter) {
+					continue;
+				}
+
+				$applied[$_key] = $_filter;
+				$next = $_filter;
+				break;
+			}
+
+			if ($next === null) {
+				break;
+			}
+
+			$next->call($this, $qb);
 		}
-		unset ($_filter);
 
 //		$forbiddenDQLParts = ['select', 'distinct', 'orderBy'];
 //		foreach ($forbiddenDQLParts as $_forbiddenDQLPart) {
