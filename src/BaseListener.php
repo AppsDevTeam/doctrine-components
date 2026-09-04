@@ -43,12 +43,15 @@ abstract class BaseListener implements EventSubscriber
 	{
 		self::$possibleChangesChecked = false;
 		EntityManager::$isFlushAllowed = false;
-		if (method_exists($this, 'onFlushCallback')) {
-			$this->onFlushCallback($eventArgs);
-		} else {
-			throw new Exception('Implement onFlushCallback first.');
+		try {
+			if (method_exists($this, 'onFlushCallback')) {
+				$this->onFlushCallback($eventArgs);
+			} else {
+				throw new Exception('Implement onFlushCallback first.');
+			}
+		} finally {
+			EntityManager::$isFlushAllowed = true;
 		}
-		EntityManager::$isFlushAllowed = true;
 
 		$this->recalculateEntities($eventArgs->getObjectManager());
 	}
@@ -60,12 +63,15 @@ abstract class BaseListener implements EventSubscriber
 	{
 		self::$possibleChangesChecked = false;
 		EntityManager::$isFlushAllowed = false;
-		if (method_exists($this, 'prePersistCallback')) {
-			$this->prePersistCallback($eventArgs);
-		} else {
-			throw new Exception('Implement prePersistCallback first.');
+		try {
+			if (method_exists($this, 'prePersistCallback')) {
+				$this->prePersistCallback($eventArgs);
+			} else {
+				throw new Exception('Implement prePersistCallback first.');
+			}
+		} finally {
+			EntityManager::$isFlushAllowed = true;
 		}
-		EntityManager::$isFlushAllowed = true;
 
 		$this->recalculateEntities($eventArgs->getObjectManager());
 	}
@@ -77,12 +83,15 @@ abstract class BaseListener implements EventSubscriber
 	{
 		self::$possibleChangesChecked = false;
 		EntityManager::$isFlushAllowed = false;
-		if (method_exists($this, 'postPersistCallback')) {
-			$this->postPersistCallback($eventArgs);
-		} else {
-			throw new Exception('Implement postPersistCallback first.');
+		try {
+			if (method_exists($this, 'postPersistCallback')) {
+				$this->postPersistCallback($eventArgs);
+			} else {
+				throw new Exception('Implement postPersistCallback first.');
+			}
+		} finally {
+			EntityManager::$isFlushAllowed = true;
 		}
-		EntityManager::$isFlushAllowed = true;
 
 		$this->recalculateEntities($eventArgs->getObjectManager());
 	}
@@ -94,12 +103,15 @@ abstract class BaseListener implements EventSubscriber
 	{
 		self::$possibleChangesChecked = false;
 		EntityManager::$isFlushAllowed = false;
-		if (method_exists($this, 'preUpdateCallback')) {
-			$this->preUpdateCallback($eventArgs);
-		} else {
-			throw new Exception('Implement preUpdateCallback first.');
+		try {
+			if (method_exists($this, 'preUpdateCallback')) {
+				$this->preUpdateCallback($eventArgs);
+			} else {
+				throw new Exception('Implement preUpdateCallback first.');
+			}
+		} finally {
+			EntityManager::$isFlushAllowed = true;
 		}
-		EntityManager::$isFlushAllowed = true;
 
 		$this->recalculateEntities($eventArgs->getObjectManager());
 	}
@@ -111,12 +123,15 @@ abstract class BaseListener implements EventSubscriber
 	{
 		self::$possibleChangesChecked = false;
 		EntityManager::$isFlushAllowed = false;
-		if (method_exists($this, 'postUpdateCallback')) {
-			$this->postUpdateCallback($eventArgs);
-		} else {
-			throw new Exception('Implement postUpdateCallback first.');
+		try {
+			if (method_exists($this, 'postUpdateCallback')) {
+				$this->postUpdateCallback($eventArgs);
+			} else {
+				throw new Exception('Implement postUpdateCallback first.');
+			}
+		} finally {
+			EntityManager::$isFlushAllowed = true;
 		}
-		EntityManager::$isFlushAllowed = true;
 
 		$this->recalculateEntities($eventArgs->getObjectManager());
 	}
