@@ -18,15 +18,32 @@
 	},
 	"require": {
 		"php": ">=8.4",
-		"doctrine/orm": "^2.18|^3.0",
+		"doctrine/orm": "^3.3",
+		"doctrine/dbal": "^4.0",
 		"nette/utils": "^3.2|^4.0",
 		"tracy/tracy": "^2.10",
 		"psr/log": "^3.0",
 		"nettrine/dbal": "^0.9.0 | ^0.10.0"
 	},
+	"require-dev": {
+		"phpunit/phpunit": "^11.5 | ^12.0",
+		"symfony/cache": "^7.0",
+		"nette/di": "^3.1 | ^4.0"
+	},
 	"autoload": {
 		"psr-4": {
 			"ADT\\DoctrineComponents\\": "src/"
 		}
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"ADT\\DoctrineComponents\\Tests\\": "tests/"
+		}
+	},
+	"scripts": {
+		"tests": "phpunit"
+	},
+	"config": {
+		"sort-packages": true
 	}
 }

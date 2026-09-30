@@ -6,12 +6,12 @@ use ADT\DoctrineComponents\QueryObject\QueryObjectByMode;
 
 trait IsActiveFilterTrait
 {
-	abstract public function by(array|string $column, mixed $value = null, QueryObjectByMode $mode = QueryObjectByMode::AUTO): static;
+	abstract public function by(array|string $column, mixed $value = null, QueryObjectByMode $mode = QueryObjectByMode::AUTO, ?string $filterKey = null): static;
 	abstract public function disableFilter(array|string $filter): static;
 
 	public function byIsActive(bool $isActive = true): static
 	{
-		return $this->by("isActive", $isActive);
+		return $this->by('isActive', $isActive, QueryObjectByMode::AUTO, IsActiveFilter::IS_ACTIVE_FILTER);
 	}
 
 	public function disableIsActiveFilter(): static
