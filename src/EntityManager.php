@@ -12,9 +12,69 @@ use ReflectionClass;
 use ReflectionException;
 use Throwable;
 
-class EntityManager extends EntityManagerDecorator
+class EntityManager extends EntityManagerDecorator implements TransactionCallbacksInterface
 {
 	public static bool $isFlushAllowed = true;
+
+	/** @var array<callable> */
+	private array $afterCommitCallbacks = [];
+
+	/** @var array<callable> */
+	private array $afterRollbackCallbacks = [];
+
+	public function afterCommit(callable $callback): void
+	{
+		if (!$this->getConnection()->isTransactionActive()) {
+			$callback();
+			return;
+		}
+
+		$this->afterCommitCallbacks[] = $callback;
+	}
+
+	public function afterRollback(callable $callback): void
+	{
+		$this->afterRollbackCallbacks[] = $callback;
+	}
+
+	public function commit(): void
+	{
+		parent::commit();
+
+		// Only the outermost commit really persists anything; the nested ones just release a savepoint.
+		if ($this->getConnection()->isTransactionActive()) {
+			return;
+		}
+
+		$this->runTransactionCallbacks($this->afterCommitCallbacks);
+	}
+
+	public function rollback(): void
+	{
+		parent::rollback();
+
+		$this->runTransactionCallbacks($this->afterRollbackCallbacks);
+	}
+
+	public function close(): void
+	{
+		parent::close();
+
+		$this->afterCommitCallbacks = $this->afterRollbackCallbacks = [];
+	}
+
+	/**
+	 * @param array<callable> $callbacks
+	 */
+	private function runTransactionCallbacks(array $callbacks): void
+	{
+		// clear both queues first, so a throwing callback cannot get replayed by the next transaction
+		$this->afterCommitCallbacks = $this->afterRollbackCallbacks = [];
+
+		foreach ($callbacks as $callback) {
+			$callback();
+		}
+	}
 
 	/**
 	 * @throws Exception
@@ -58,6 +118,9 @@ class EntityManager extends EntityManagerDecorator
 			// Closing the connection resets it; DBAL reconnects lazily on next use.
 			$connection->close();
 		}
+
+		// we roll back on the connection directly, so rollback() above has not run
+		$this->runTransactionCallbacks($this->afterRollbackCallbacks);
 	}
 
 	/**
