@@ -417,3 +417,24 @@ You should always use new `EntityManager` instance, not the default one (because
 - Methods `by` and `orderBy` are public methods, but it's always better to create own `by*` or `orderBy*` methods.
 
 - You should always specify a deterministic order, ideally with usage of primary key.
+
+## Session time zone
+
+Sets the application's time zone on a connection right after it opens. Typically for log
+storage: logs are written in UTC into `TIMESTAMPTZ` columns, and without this the database
+returns them in the server's zone (usually UTC) - the administration would show times
+shifted by the zone offset. With the session zone set, the database returns the same
+instant with the application's offset, including the correct DST offset for each row.
+Stored values are not changed, only how they are read.
+
+```neon
+nettrine.dbal:
+	connections:
+		logdb:
+			middlewares:
+				timeZone: ADT\DoctrineComponents\Middleware\SessionTimeZoneMiddleware(%timeZone%)
+```
+
+Works on PostgreSQL (`SET TIME ZONE`) and MySQL (`SET time_zone`). On MySQL it affects only
+`TIMESTAMP` columns, and named zones such as `Europe/Prague` need the time zone tables loaded
+(`mysql_tzinfo_to_sql`); an offset such as `+01:00` always works.
