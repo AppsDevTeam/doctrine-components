@@ -438,3 +438,38 @@ nettrine.dbal:
 Works on PostgreSQL (`SET TIME ZONE`) and MySQL (`SET time_zone`). On MySQL it affects only
 `TIMESTAMP` columns, and named zones such as `Europe/Prague` need the time zone tables loaded
 (`mysql_tzinfo_to_sql`); an offset such as `+01:00` always works.
+
+## Indexes on traits
+
+Doctrine reads `#[ORM\Index]` and `#[ORM\UniqueConstraint]` only from the entity class itself
+and silently ignores them on traits. An index belongs to its columns, though, and the columns
+come from the trait - with `TraitIndexListener` the trait carries its indexes along and the
+entity does not have to repeat them:
+
+```php
+#[ORM\Index(fields: ['createdAt'])]
+trait AuditLogTrait
+{
+	#[ORM\Column]
+	protected DateTimeImmutable $createdAt;
+}
+```
+
+```neon
+services:
+	- ADT\DoctrineComponents\Listeners\TraitIndexListener
+```
+
+- Traits of the entity, of its parents (mapped superclasses included) and traits used inside
+  traits are all searched.
+- An index the entity declares itself - with the same name, or on the same columns in the same
+  order - is not added again, so the entity can override a trait index with its own definition.
+- Unnamed indexes are named by the SchemaTool from the table and columns, so one trait on several
+  entities does not collide, and moving an index from the entity to the trait keeps its name in
+  the database (`migrations-diff` stays empty).
+- A field the entity does not map (or a composite association) fails loudly with
+  a `MappingException` naming the trait.
+- Indexes are computed when metadata is loaded and cached with it; there is no runtime cost.
+
+Put on traits only what belongs to the trait's columns in every project. Constraints that
+depend on the project (e.g. uniqueness per account) stay on the entity.
