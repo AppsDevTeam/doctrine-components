@@ -456,9 +456,12 @@ trait AuditLogTrait
 ```
 
 ```neon
-services:
-	- ADT\DoctrineComponents\Listeners\TraitIndexListener
+extensions:
+	doctrineComponents: ADT\DoctrineComponents\DI\DoctrineComponentsExtension
 ```
+
+The extension registers the listener; nettrine/orm picks it up by type, so the order of
+extensions does not matter.
 
 - Traits of the entity, of its parents (mapped superclasses included) and traits used inside
   traits are all searched.

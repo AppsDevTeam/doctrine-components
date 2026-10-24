@@ -41,10 +41,7 @@ use ReflectionClass;
  *
  * Indexy se počítají při načtení metadat a ukládají se s nimi do cache, za běhu nic nestojí.
  *
- * ```neon
- * services:
- *     - ADT\DoctrineComponents\Listeners\TraitIndexListener
- * ```
+ * Registruje ho DoctrineComponentsExtension.
  */
 class TraitIndexListener implements EventSubscriber
 {
