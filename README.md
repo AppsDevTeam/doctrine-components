@@ -476,3 +476,39 @@ extensions does not matter.
 
 Put on traits only what belongs to the trait's columns in every project. Constraints that
 depend on the project (e.g. uniqueness per account) stay on the entity.
+
+## Orphan removal safeguards
+
+Two listeners that keep a flush from failing after `orphanRemoval: true` (typically with
+Gedmo SoftDeleteable). `DoctrineComponentsExtension` registers both; without the extension
+register them as services yourself (nettrine/orm picks them up by type).
+
+### `OrphanRemovalNestedFlushListener`
+
+Doctrine removes orphans in `UnitOfWork::commit()` but clears its list of orphans only after
+`postFlush`. A `postFlush` listener that flushes again therefore removes the same orphans
+a second time - a soft-deleted entity has already been detached by Gedmo, so the nested flush
+fails with *"Detached entity … cannot be removed"* and the whole save is rolled back.
+
+The listener remembers entities passed to `remove()` and cancels their scheduled orphan removal
+at the start of the next flush (`preFlush`). The order of listeners does not matter.
+
+It calls the internal `UnitOfWork::cancelOrphanRemoval()` - check it (and the tests) when
+upgrading doctrine/orm.
+
+### `MissingEntityRemovalListener`
+
+`remove()` of an entity whose row no longer exists is a no-op instead of
+an `EntityNotFoundException`. Typically an association holds an uninitialized proxy whose row
+was meanwhile deleted by a concurrent request, or is hidden by an SQL filter (a reference to an
+already soft-deleted row). Doctrine itself does not load the proxy on `remove()`, but listeners
+do - Gedmo SoftDeleteable writes `deletedAt` in `onFlush` - and loading it fails the flush.
+
+The listener loads the proxy in `preRemove`; when that fails, it detaches the entity, so it is
+never scheduled for deletion.
+
+- A loadable proxy is initialized right away (one `SELECT`), which listeners running after it
+  in `preRemove` can rely on.
+- Detaching does not stop other `preRemove` listeners of the same event - a listener that reads
+  data of the entity in `preRemove` should skip uninitialized proxies
+  (`$em->isUninitializedObject($entity)`), or be registered after this listener.
