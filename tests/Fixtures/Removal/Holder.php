@@ -16,4 +16,7 @@ class Holder
 
 	#[ORM\OneToOne(targetEntity: Attachment::class, orphanRemoval: true)]
 	public ?Attachment $attachment = null;
+
+	#[ORM\OneToOne(targetEntity: PlainAttachment::class, orphanRemoval: true)]
+	public ?PlainAttachment $plainAttachment = null;
 }

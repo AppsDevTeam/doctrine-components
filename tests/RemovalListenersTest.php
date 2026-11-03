@@ -8,7 +8,9 @@ use ADT\DoctrineComponents\Listeners\MissingEntityRemovalListener;
 use ADT\DoctrineComponents\Listeners\OrphanRemovalNestedFlushListener;
 use ADT\DoctrineComponents\Tests\Fixtures\Removal\Attachment;
 use ADT\DoctrineComponents\Tests\Fixtures\Removal\FakeSoftDeleteListener;
+use ADT\DoctrineComponents\Tests\Fixtures\Removal\HiddenFilter;
 use ADT\DoctrineComponents\Tests\Fixtures\Removal\Holder;
+use ADT\DoctrineComponents\Tests\Fixtures\Removal\PlainAttachment;
 use ADT\DoctrineComponents\Tests\Fixtures\Removal\SoftDeleteFilter;
 use Doctrine\Common\EventManager;
 use Doctrine\Common\EventSubscriber;
@@ -101,12 +103,20 @@ final class RemovalListenersTest extends TestCase
 
 	/**
 	 * Vazba odkazuje na řádek, který je už soft-smazaný - filtr ho při načtení proxy skryje.
-	 * Řádek má zůstat soft-smazaný, ne se mazat natvrdo.
+	 * S filtrem v $softDeleteFilters má řádek zůstat soft-smazaný, ne se mazat natvrdo. Bez listeneru
+	 * i s listenerem bez nastaveného filtru zůstává původní chování (pád v soft-delete listeneru).
 	 */
 	public function testOrphanHiddenBySoftDeleteFilter(): void
 	{
-		foreach ([false, true] as $withListener) {
-			$em = $this->createEntityManager($withListener ? [new MissingEntityRemovalListener()] : []);
+		$variants = [
+			'bez listeneru' => [],
+			'listener bez soft-delete filtru' => [new MissingEntityRemovalListener()],
+			'listener se soft-delete filtrem' => [new MissingEntityRemovalListener(['softDelete'])],
+		];
+
+		foreach ($variants as $variant => $subscribers) {
+			$withListener = $variant === 'listener se soft-delete filtrem';
+			$em = $this->createEntityManager($subscribers);
 			[$holder, $old] = $this->createHolderWithAttachment($em);
 			$em->getConnection()->update('attachment', ['deleted_at' => '2026-01-01 00:00:00'], ['id' => $old->id]);
 			$em->clear();
@@ -131,7 +141,7 @@ final class RemovalListenersTest extends TestCase
 	 */
 	public function testLoadableOrphanIsRemovedNormally(): void
 	{
-		$em = $this->createEntityManager([new MissingEntityRemovalListener(), new OrphanRemovalNestedFlushListener()]);
+		$em = $this->createEntityManager([new MissingEntityRemovalListener(['softDelete']), new OrphanRemovalNestedFlushListener()]);
 		[$holder, $old] = $this->createHolderWithAttachment($em);
 		$em->clear();
 
@@ -144,6 +154,36 @@ final class RemovalListenersTest extends TestCase
 	}
 
 	/**
+	 * Řádek skrytý jiným filtrem než soft-delete (třeba podle tenantu) se maže stejně jako bez listeneru -
+	 * listener ho nesmí potichu přeskočit.
+	 */
+	public function testOrphanHiddenByOtherFilterIsRemovedAsWithoutListener(): void
+	{
+		foreach ([[], [new MissingEntityRemovalListener(['softDelete'])]] as $subscribers) {
+			$em = $this->createEntityManager($subscribers);
+
+			$holder = new Holder();
+			$holder->plainAttachment = $plain = new PlainAttachment();
+			$em->persist($plain);
+			$em->persist($holder);
+			$em->flush();
+
+			$em->getConnection()->update('plain_attachment', ['hidden' => 1], ['id' => $plain->id]);
+			$em->clear();
+
+			$holder = $em->find(Holder::class, $holder->id);
+			$this->assertTrue($em->isUninitializedObject($holder->plainAttachment));
+			$holder->plainAttachment = null;
+			$em->flush();
+
+			$this->assertFalse(
+				$em->getConnection()->fetchOne('SELECT id FROM plain_attachment WHERE id = ?', [$plain->id]),
+				'řádek skrytý jiným filtrem se má smazat'
+			);
+		}
+	}
+
+	/**
 	 * @param list<EventSubscriber> $subscribers
 	 */
 	private function createEntityManager(array $subscribers): EntityManager
@@ -152,6 +192,7 @@ final class RemovalListenersTest extends TestCase
 		$config->setNamingStrategy(new UnderscoreNamingStrategy());
 		$config->enableNativeLazyObjects(true);
 		$config->addFilter('softDelete', SoftDeleteFilter::class);
+		$config->addFilter('hidden', HiddenFilter::class);
 
 		$eventManager = new EventManager();
 		$eventManager->addEventSubscriber(new FakeSoftDeleteListener());
@@ -162,6 +203,7 @@ final class RemovalListenersTest extends TestCase
 		$connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true], $config);
 		$em = new EntityManager($connection, $config, $eventManager);
 		$em->getFilters()->enable('softDelete');
+		$em->getFilters()->enable('hidden');
 
 		(new SchemaTool($em))->createSchema($em->getMetadataFactory()->getAllMetadata());
 

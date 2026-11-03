@@ -500,15 +500,33 @@ upgrading doctrine/orm.
 
 `remove()` of an entity whose row no longer exists is a no-op instead of
 an `EntityNotFoundException`. Typically an association holds an uninitialized proxy whose row
-was meanwhile deleted by a concurrent request, or is hidden by an SQL filter (a reference to an
-already soft-deleted row). Doctrine itself does not load the proxy on `remove()`, but listeners
-do - Gedmo SoftDeleteable writes `deletedAt` in `onFlush` - and loading it fails the flush.
+was meanwhile deleted by a concurrent request. Doctrine itself does not load the proxy on
+`remove()`, but listeners do - Gedmo SoftDeleteable writes `deletedAt` in `onFlush` - and
+loading it fails the flush.
 
-The listener loads the proxy in `preRemove`; when that fails, it detaches the entity, so it is
-never scheduled for deletion.
+The listener loads the proxy in `preRemove`. When that fails:
 
-- A loadable proxy is initialized right away (one `SELECT`), which listeners running after it
-  in `preRemove` can rely on.
+- **the row does not exist** (checked by a plain query, without SQL filters) - the entity is
+  detached, so it is never scheduled for deletion;
+- **the row is hidden by a soft-delete filter** listed in `softDeleteFilters` (a reference to an
+  already soft-deleted row) - the entity is loaded with that filter suspended and detached;
+  the row stays soft-deleted;
+- **the row is hidden by any other filter** (e.g. tenant) - nothing changes, the removal runs
+  as without the listener.
+
+```neon
+doctrineComponents:
+	softDeleteFilters: [soft-deleteable]
+```
+
+Without the extension register it as `MissingEntityRemovalListener(['soft-deleteable'])`.
+
+- Removing an **uninitialized proxy** costs one extra `SELECT` (the proxy is loaded); when it
+  cannot be loaded, one more query checks whether the row exists. Initialized entities are untouched.
+- Soft-delete filters are suspended via `FilterCollection::suspend()`/`restore()`, which keeps
+  their parameters; on an ORM without `suspend()` the soft-delete case is not handled.
+- Only single-column identifiers are checked for existence; with a composite identifier the
+  listener does not interfere.
 - Detaching does not stop other `preRemove` listeners of the same event - a listener that reads
   data of the entity in `preRemove` should skip uninitialized proxies
   (`$em->isUninitializedObject($entity)`), or be registered after this listener.
