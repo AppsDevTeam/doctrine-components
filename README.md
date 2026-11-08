@@ -453,13 +453,17 @@ services:
 	- ADT\DoctrineComponents\Console\KillSessionsCommand
 ```
 
+- `--wait=N` first waits up to N seconds until no session of the user is busy (a running
+  statement or an open transaction), so that a consumer finishes its job instead of losing it
+  half-way; then the idle sessions are killed. Without the `PROCESS` privilege open transactions
+  are not visible (`information_schema.INNODB_TRX`) and only running statements are waited for.
 - `KILL` sent through ProxySQL does not reach the backend, so on Galera the command connects
   directly to the node the proxy writes to (`@@wsrep_node_address` + `@@port`, asked through
   the proxy) with the same credentials. Without Galera it uses the connection itself.
 - Only the sessions of the same user are killed, which needs no extra privilege. Sessions of
   other users (people with their own accounts, backups) stay.
-- A killed open transaction ends with an error; a single autocommit query outside
-  a transaction may be retried by ProxySQL (`mysql-query_retries_on_failure`).
+- Killed in three rounds a second apart: ProxySQL retries a killed autocommit statement on
+  a new connection (`mysql-query_retries_on_failure`), which would hold the locks again.
 
 ## Indexes on traits
 
