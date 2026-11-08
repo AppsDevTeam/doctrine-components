@@ -22,6 +22,9 @@ class EntityManager extends EntityManagerDecorator implements TransactionCallbac
 	/** @var array<callable> */
 	private array $afterRollbackCallbacks = [];
 
+	/** @var array<string, string> rozhraní => třída entity (findEntityClassByInterface) */
+	private array $entityClassByInterface = [];
+
 	public function afterCommit(callable $callback): void
 	{
 		if (!$this->getConnection()->isTransactionActive()) {
@@ -179,10 +182,26 @@ class EntityManager extends EntityManagerDecorator implements TransactionCallbac
 	 */
 	public function findEntityClassByInterface(string $interfaceName): string
 	{
+		// getAllMetadata() načte metadata všech entit a projde jejich adresáře - volá se z gridů
+		// a presenterů při každém požadavku. Výsledek se pamatuje v instanci a s cache metadat
+		// Doctrine i mezi požadavky (mapování se mění jen s kódem, tedy s novou cache).
+		if (isset($this->entityClassByInterface[$interfaceName])) {
+			return $this->entityClassByInterface[$interfaceName];
+		}
+		$cache = $this->getConfiguration()->getMetadataCache();
+		$cacheItem = $cache?->getItem('adt_entity_class_by_interface_' . md5($interfaceName));
+		if ($cacheItem?->isHit() && is_string($cacheItem->get())) {
+			return $this->entityClassByInterface[$interfaceName] = $cacheItem->get();
+		}
+
 		foreach ($this->getMetadataFactory()->getAllMetadata() as $classMetadata) {
 			$className = $classMetadata->getName();
 			if (new ReflectionClass($className)->implementsInterface($interfaceName)) {
-				return $className;
+				if ($cache !== null && $cacheItem !== null) {
+					$cache->save($cacheItem->set($className));
+				}
+
+				return $this->entityClassByInterface[$interfaceName] = $className;
 			}
 		}
 
