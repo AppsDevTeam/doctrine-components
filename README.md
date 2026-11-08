@@ -439,6 +439,28 @@ Works on PostgreSQL (`SET TIME ZONE`) and MySQL (`SET time_zone`). On MySQL it a
 `TIMESTAMP` columns, and named zones such as `Europe/Prague` need the time zone tables loaded
 (`mysql_tzinfo_to_sql`); an offset such as `+01:00` always works.
 
+## Killing sessions before migrations
+
+`dbal:kill-sessions` kills the other sessions of the connection's database user. A deploy runs
+it in a maintenance window right before the migrations (recipe of
+[adt/docker-deployer](https://github.com/AppsDevTeam/docker-deployer), target
+`migrations-kill-sessions`): DDL on a Galera cluster conflicts with the metadata locks held by
+the running application - even a plain `SELECT` in an open transaction holds one - and
+an `ALTER TABLE ... ADD FOREIGN KEY` on a table in use can crash a node.
+
+```neon
+services:
+	- ADT\DoctrineComponents\Console\KillSessionsCommand
+```
+
+- `KILL` sent through ProxySQL does not reach the backend, so on Galera the command connects
+  directly to the node the proxy writes to (`@@wsrep_node_address` + `@@port`, asked through
+  the proxy) with the same credentials. Without Galera it uses the connection itself.
+- Only the sessions of the same user are killed, which needs no extra privilege. Sessions of
+  other users (people with their own accounts, backups) stay.
+- A killed open transaction ends with an error; a single autocommit query outside
+  a transaction may be retried by ProxySQL (`mysql-query_retries_on_failure`).
+
 ## Indexes on traits
 
 Doctrine reads `#[ORM\Index]` and `#[ORM\UniqueConstraint]` only from the entity class itself
