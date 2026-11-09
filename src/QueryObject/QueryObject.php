@@ -9,6 +9,12 @@ use ADT\DoctrineComponents\QueryObject\ResultSet;
 use ArrayIterator;
 use Closure;
 use Doctrine;
+use Doctrine\DBAL\Types\IntegerType;
+use Doctrine\DBAL\Types\PhpIntegerMappingType;
+use Doctrine\DBAL\Types\SmallIntType;
+use Doctrine\DBAL\Types\StringType;
+use Doctrine\DBAL\Types\TextType;
+use Doctrine\DBAL\Types\Type;
 use Doctrine\ORM\AbstractQuery;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\NonUniqueResultException;
@@ -197,6 +203,8 @@ abstract class QueryObject implements QueryObjectInterface
 
 			$x = array_map(
 				function($_column) use ($qb, $value, $mode) {
+					$field = $this->resolveField($_column);
+
 					if ($mode === QueryObjectByMode::BETWEEN && is_null($value[0])) {
 						$mode = QueryObjectByMode::LESS_OR_EQUAL;
 						$value = $value[1];
@@ -226,6 +234,42 @@ abstract class QueryObject implements QueryObjectInterface
 					$_column = $this->addColumnPrefix($_column);
 					$_column = $this->getJoinedEntityColumnName($_column);
 
+					// PostgreSQL neporovná LIKE s číslem, datem ani JSONem (operator does not exist:
+					// integer ~~ unknown) - sloupec se proto na text převede. CAST v DQL není,
+					// CONCAT se přeloží na všech platformách a MySQL tím výsledek nemění.
+					$likeColumn = $field !== null && !$field['type'] instanceof StringType && !$field['type'] instanceof TextType
+						? "CONCAT($_column, '')"
+						: $_column;
+
+					// Hodnota, která v celočíselném sloupci být nemůže (text, desetinné číslo, číslo
+					// mimo rozsah), by na PostgreSQL shodila dotaz (invalid input syntax for type
+					// integer) a MySQL by ji převedl na 0. Nerovná se tedy ničemu.
+					if (
+						$field !== null
+						&& $field['type'] instanceof PhpIntegerMappingType
+						&& in_array($mode, [QueryObjectByMode::EQUALS, QueryObjectByMode::NOT_EQUALS, QueryObjectByMode::IN_ARRAY, QueryObjectByMode::NOT_IN_ARRAY], true)
+						&& (is_array($value) || is_scalar($value))
+					) {
+						$values = [];
+						foreach (is_array($value) ? $value : [$value] as $_value) {
+							if (!is_scalar($_value)) {
+								$values[] = $_value;
+							} elseif (($_value = $this->toIntegerFieldValue($_value, $field)) !== null) {
+								$values[] = $_value;
+							}
+						}
+						$value = $values;
+
+						if (!$value) {
+							$isNegation = in_array($mode, [QueryObjectByMode::NOT_EQUALS, QueryObjectByMode::NOT_IN_ARRAY], true);
+							return $isNegation ? "$_column IS NOT NULL" : '1 = 0';
+						}
+
+						if (in_array($mode, [QueryObjectByMode::EQUALS, QueryObjectByMode::NOT_EQUALS], true)) {
+							$value = $value[0];
+						}
+					}
+
 					switch ($mode) {
 						case QueryObjectByMode::EQUALS:
 							$condition = "$_column = :$paramName";
@@ -237,22 +281,22 @@ abstract class QueryObject implements QueryObjectInterface
 
 						case QueryObjectByMode::STARTS_WITH:
 							$value = "$value%";
-							$condition = "$_column LIKE :$paramName";
+							$condition = "$likeColumn LIKE :$paramName";
 							break;
 
 						case QueryObjectByMode::ENDS_WITH:
 							$value = "%$value";
-							$condition = "$_column LIKE :$paramName";
+							$condition = "$likeColumn LIKE :$paramName";
 							break;
 
 						case QueryObjectByMode::CONTAINS:
 							$value = "%$value%";
-							$condition = "$_column LIKE :$paramName";
+							$condition = "$likeColumn LIKE :$paramName";
 							break;
 
 						case QueryObjectByMode::NOT_CONTAINS:
 							$value = "%$value%";
-							$condition = "$_column NOT LIKE :$paramName";
+							$condition = "$likeColumn NOT LIKE :$paramName";
 							break;
 
 						case QueryObjectByMode::IS_NULL:
@@ -330,6 +374,74 @@ abstract class QueryObject implements QueryObjectInterface
 			$qb->andWhere($qb->expr()->orX(...$x));
 		};
 		return $this;
+	}
+
+	/**
+	 * Pole entity, na které míří sloupec z `by()` (i přes vazby v tečkové notaci), nebo null,
+	 * když to pole není - vazba, alias z ručního joinu, výraz, neznámý typ.
+	 *
+	 * @return array{type: Type, unsigned: bool}|null
+	 * @internal
+	 */
+	final protected function resolveField(string $column): ?array
+	{
+		try {
+			$metadata = $this->em->getClassMetadata($this->getEntityClass());
+			$field = $column;
+
+			// embeddable ma pole primo v tecce ("address.street"), vazba ne
+			while (!$metadata->hasField($field) && str_contains($field, '.')) {
+				[$association, $field] = explode('.', $field, 2);
+				if (!$metadata->hasAssociation($association)) {
+					return null;
+				}
+				$metadata = $this->em->getClassMetadata($metadata->getAssociationTargetClass($association));
+			}
+
+			if (!$metadata->hasField($field)) {
+				return null;
+			}
+
+			$mapping = $metadata->getFieldMapping($field);
+			$typeName = $mapping['type'] ?? null;
+			if (!is_string($typeName) || !Type::hasType($typeName)) {
+				return null;
+			}
+
+			return [
+				'type' => Type::getType($typeName),
+				'unsigned' => (bool) ($mapping['options']['unsigned'] ?? false),
+			];
+		} catch (Exception) {
+			return null;
+		}
+	}
+
+	/**
+	 * Hodnota jako číslo, nebo null, když se do celočíselného sloupce nevejde.
+	 *
+	 * @param array{type: Type, unsigned: bool} $field
+	 * @internal
+	 */
+	final protected function toIntegerFieldValue(int|float|string|bool $value, array $field): ?int
+	{
+		$bits = match (true) {
+			$field['type'] instanceof SmallIntType => 16,
+			$field['type'] instanceof IntegerType => 32,
+			default => 64,
+		};
+
+		if ($bits === 64) {
+			$range = [];
+		} elseif ($field['unsigned']) {
+			$range = ['min_range' => 0, 'max_range' => 2 ** $bits - 1];
+		} else {
+			$range = ['min_range' => -(2 ** ($bits - 1)), 'max_range' => 2 ** ($bits - 1) - 1];
+		}
+
+		$value = filter_var(is_string($value) ? trim($value) : $value, FILTER_VALIDATE_INT, ['options' => $range]);
+
+		return $value === false ? null : $value;
 	}
 
 	/**

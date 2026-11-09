@@ -100,6 +100,12 @@ Method `by` is a shortcut for creating `filter` callbacks. It offers some useful
 
 - If you would like get all value in certain range, you can use parameter `filterType` with value `FilterTypeEnum::RANGE`.
 
+- `LIKE` modes (`STARTS_WITH`, `ENDS_WITH`, `CONTAINS`, `NOT_CONTAINS`) on a field that is not a string or text (integer, date, JSON, ...) compare its text: the column is wrapped in `CONCAT(column, '')`. PostgreSQL does not compare `LIKE` with a number (`operator does not exist: integer ~~ unknown`); MySQL converts it implicitly, so its results do not change.
+
+- `EQUALS`, `NOT_EQUALS`, `IN_ARRAY` and `NOT_IN_ARRAY` on an integer field drop values that cannot be in it (text, decimals, numbers out of the column's range, `unsigned` respected). PostgreSQL would fail on them (`invalid input syntax for type integer`) and MySQL would convert text to `0`. With nothing left, `EQUALS`/`IN_ARRAY` match nothing and `NOT_EQUALS`/`NOT_IN_ARRAY` match every non-null value.
+
+- Both apply only when the column resolves to a mapped field of the entity (dot notation through associations included); anything else (an alias from a manual join, an association) is left as it is.
+
 Method `orderBy` is a shortcut for setting `order` callback.
 
 - You can use a column name as first parameter and ASC/DESC as a second parameter instead of an array, if you need to sort only by one column.
