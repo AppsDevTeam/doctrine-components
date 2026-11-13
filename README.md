@@ -471,6 +471,58 @@ services:
 - Killed in three rounds a second apart: ProxySQL retries a killed autocommit statement on
   a new connection (`mysql-query_retries_on_failure`), which would hold the locks again.
 
+## Expand and contract migrations
+
+A deploy runs the migrations first and switches the release only afterwards, so until the
+switch (and after a rollback) the old code runs on the migrated schema. A migration that
+removes something the old code still uses - `DROP` of a column or table, a rename, `NOT NULL`
+on a nullable column - breaks it right away. The Expand and Contract pattern splits such
+a change in two migrations:
+
+- **expand** (the default): a backward compatible change - a new table, a new nullable column
+  or a column with a default, a new index, a data backfill. The old code keeps working with it.
+- **contract** (implements `ADT\DoctrineComponents\Migrations\ContractMigration`): the cleanup
+  that breaks the old code. It runs once its code is the running release, i.e. one deploy
+  later.
+
+```php
+use ADT\DoctrineComponents\Migrations\ContractMigration;
+
+final class Version20260101120000 extends AbstractMigration implements ContractMigration
+{
+	public function up(Schema $schema): void
+	{
+		$this->addSql('ALTER TABLE customer DROP COLUMN legacy_name');
+	}
+}
+```
+
+`migrations:migrate` of [nettrine/migrations](https://github.com/contributte/migrations) is
+replaced by `ADT\DoctrineComponents\Console\MigrateCommand` - same name, arguments, options
+and output, so deploy scripts keep working:
+
+```neon
+doctrineComponents:
+	expandContract: true
+```
+
+- A contract migration whose file is missing in the running release (`current` of the
+  Deployer layout `<deploy path>/releases/<release>`, found from the file of the migration)
+  waits for the next deploy; the command says so. Outside of the layout (local development,
+  CI, the first deploy) everything pending runs.
+- `--phase=expand` / `--phase=contract` runs only the given phase, a contract migration then
+  even if its code is not running yet - e.g. right after the release is verified, when a rollback
+  is no longer needed.
+- The dry-run (`--dry-run`, the deploy runs it first) fails when an expand migration contains
+  a change that breaks the old code: `DROP TABLE`/`VIEW`, `DROP [COLUMN]`, `RENAME`, `CHANGE`
+  with a new name, `SET NOT NULL` (`ADT\DoctrineComponents\Migrations\BreakingChangeDetector`).
+  `NOT NULL` on MySQL (`CHANGE`/`MODIFY` repeat the whole column definition) and a narrowed
+  type are not detected - they need the same care.
+- `migrations:migrate prev` or a version is handled by Doctrine's command, without phases.
+- A deferred contract migration runs after newer expand migrations, so an expand migration must
+  not build on it. `migrations:status` and `migrations:up-to-date` count it as pending until the
+  next deploy.
+
 ## Indexes on traits
 
 Doctrine reads `#[ORM\Index]` and `#[ORM\UniqueConstraint]` only from the entity class itself

@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace ADT\DoctrineComponents\DI;
 
+use ADT\DoctrineComponents\Console\MigrateCommand;
 use ADT\DoctrineComponents\Listeners\MissingEntityRemovalListener;
 use ADT\DoctrineComponents\Listeners\OrphanRemovalNestedFlushListener;
 use ADT\DoctrineComponents\Listeners\TraitIndexListener;
+use Doctrine\Migrations\Tools\Console\Command\MigrateCommand as DoctrineMigrateCommand;
 use Nette\DI\CompilerExtension;
+use Nette\DI\Definitions\ServiceDefinition;
 use Nette\Schema\Expect;
 use Nette\Schema\Schema;
 
@@ -18,6 +21,10 @@ use Nette\Schema\Schema;
  * nettrine/orm si je najde podle typu (EventSubscriber) a navěsí na event manager, takže na pořadí
  * rozšíření nezáleží.
  *
+ * S `expandContract: true` nahradí `migrations:migrate` z nettrine/migrations příkazem pro Expand and
+ * Contract pattern (ADT\DoctrineComponents\Console\MigrateCommand) - definice si nechá jméno i tag
+ * `console.command`, mění se jen třída.
+ *
  * ```neon
  * extensions:
  *     doctrineComponents: ADT\DoctrineComponents\DI\DoctrineComponentsExtension
@@ -25,6 +32,8 @@ use Nette\Schema\Schema;
  * doctrineComponents:
  *     # SQL filtry skrývající soft-smazané řádky - remove() vazby na takový řádek je no-op (MissingEntityRemovalListener)
  *     softDeleteFilters: [soft-deleteable]
+ *     # migrations:migrate s fázemi expand/contract (ContractMigration)
+ *     expandContract: true
  * ```
  */
 class DoctrineComponentsExtension extends CompilerExtension
@@ -33,6 +42,7 @@ class DoctrineComponentsExtension extends CompilerExtension
 	{
 		return Expect::structure([
 			'softDeleteFilters' => Expect::listOf('string')->default([]),
+			'expandContract' => Expect::bool(false),
 		]);
 	}
 
@@ -53,5 +63,30 @@ class DoctrineComponentsExtension extends CompilerExtension
 		$builder->addDefinition($this->prefix('missingEntityRemovalListener'))
 			->setFactory(MissingEntityRemovalListener::class, [$config->softDeleteFilters])
 			->setAutowired(false);
+	}
+
+	public function beforeCompile(): void
+	{
+		/** @var \stdClass $config */
+		$config = $this->getConfig();
+		if (!$config->expandContract) {
+			return;
+		}
+
+		if (!class_exists(DoctrineMigrateCommand::class)) {
+			throw new \LogicException(sprintf('%s.expandContract needs doctrine/migrations.', $this->name));
+		}
+
+		// Registered by nettrine/migrations in its loadConfiguration and found by type - the name of the
+		// definition is nettrine's business
+		$definitions = $this->getContainerBuilder()->findByType(DoctrineMigrateCommand::class);
+		if ($definitions === []) {
+			throw new \LogicException(sprintf('%s.expandContract: no migrations:migrate command (%s) is registered - add nettrine/migrations first.', $this->name, DoctrineMigrateCommand::class));
+		}
+		foreach ($definitions as $definition) {
+			if ($definition instanceof ServiceDefinition) {
+				$definition->setFactory(MigrateCommand::class)->setType(MigrateCommand::class);
+			}
+		}
 	}
 }
