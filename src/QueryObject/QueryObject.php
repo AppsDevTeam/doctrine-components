@@ -514,7 +514,6 @@ abstract class QueryObject implements QueryObjectInterface
 			foreach ($_row as $_property => $_value) {
 				if ($reflectionClass->hasProperty($_property)) {
 					$prop = $reflectionClass->getProperty($_property);
-					$prop->setAccessible(true);
 					$prop->setValue($_dto, $_value);
 				} else {
 					throw new Exception('Property ' . $dtoClass . '::' . $_property . ' does not exist.');
@@ -1020,10 +1019,8 @@ abstract class QueryObject implements QueryObjectInterface
 			// musime tedy poresit jen TO_MANY
 			if ($association['type'] & Doctrine\ORM\Mapping\ClassMetadataInfo::TO_MANY) {
 				$refCollProperty = new ReflectionProperty(get_class($firstRootEntity), $association['fieldName']);
-				$refCollProperty->setAccessible(true);
 
 				$refInitProperty = new ReflectionProperty(PersistentCollection::class, 'initialized');
-				$refInitProperty->setAccessible(true);
 
 				if ($association['type'] === Doctrine\ORM\Mapping\ClassMetadataInfo::MANY_TO_MANY) {
 					// u MANY_TO_MANY relací se nám ztratila informace o tom, která entita patří do jaké kolekce,
@@ -1046,7 +1043,6 @@ abstract class QueryObject implements QueryObjectInterface
 					if ($association['type'] !== Doctrine\ORM\Mapping\ClassMetadataInfo::MANY_TO_MANY) {
 						$reflector = new ReflectionClass($row);
 						$property = $reflector->getProperty($propertyName);
-						$property->setAccessible(true);
 						$rootEntity = $property->getValue($row);
 						$collections[] = $refCollProperty->getValue($rootEntity);
 					} elseif (isset($manyToManyMapping)) {
