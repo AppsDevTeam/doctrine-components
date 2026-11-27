@@ -166,6 +166,13 @@ class EntityManager extends EntityManagerDecorator implements TransactionCallbac
 
 	protected function lowLevelDelete(object $entity): void
 	{
+		// Persister maže i řádky spojovacích tabulek ManyToMany jako remove() - holý DQL DELETE by na jejich
+		// cizích klíčích spadl a mazatelná entita by vypadala jako použitá
+		if ($this->contains($entity)) {
+			$this->getUnitOfWork()->getEntityPersister($entity::class)->delete($entity);
+			return;
+		}
+
 		$class = get_class($entity);
 		$this->createQueryBuilder()
 			->delete()
